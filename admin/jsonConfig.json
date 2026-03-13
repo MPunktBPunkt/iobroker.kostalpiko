@@ -1,0 +1,64 @@
+{
+  "type": "panel",
+  "title": "Kostal PIKO Adapter – Konfiguration",
+  "items": {
+    "_h1": { "type":"header", "text":"Wechselrichter-Verbindung", "size":4 },
+    "ip": {
+      "type":"text", "label":"IP-Adresse des Wechselrichters",
+      "help":"z. B. 192.168.178.30", "default":"192.168.178.30", "required":true, "sm":6
+    },
+    "port": {
+      "type":"number", "label":"HTTP-Port", "help":"Standard: 80",
+      "default":80, "min":1, "max":65535, "sm":3
+    },
+    "_h2": { "type":"header", "text":"Authentifizierung", "size":4 },
+    "user": {
+      "type":"text", "label":"Benutzername", "help":"Standard: pvserver",
+      "default":"pvserver", "sm":4
+    },
+    "password": {
+      "type":"password", "label":"Passwort", "help":"Standard: pvwr",
+      "default":"pvwr", "sm":4
+    },
+    "_h3": { "type":"header", "text":"Live-Polling", "size":4 },
+    "pollInterval": {
+      "type":"number", "label":"Poll-Intervall (Sekunden)",
+      "help":"Wie oft werden die Live-Messwerte vom Wechselrichter abgerufen. Empfohlen: 30",
+      "default":30, "min":5, "max":3600, "sm":4
+    },
+    "_h4": { "type":"header", "text":"Historiendaten & InfluxDB-Synchronisation", "size":4 },
+    "_info4": {
+      "type":"staticText",
+      "text":"Die LogDaten.dat enthält 15-Minuten-Messreihen der letzten ~6 Monate. Der Adapter lädt diese Datei automatisch in dem unten angegebenen Intervall, berechnet die echten Messzeitpunkte und überträgt neue Datenpunkte an InfluxDB. Die InfluxDB-Verbindung (Host, Port, Datenbank, Token) wird im ioBroker-Admin unter 'Adapter → InfluxDB' konfiguriert – nicht hier."
+    },
+    "historyFetch": {
+      "type":"checkbox",
+      "label":"Historiendaten abrufen & an InfluxDB senden",
+      "help":"Aktiviert den automatischen Abruf der LogDaten.dat und die Synchronisation mit InfluxDB",
+      "default":false, "sm":12
+    },
+    "syncInterval": {
+      "type":"number",
+      "label":"Sync-Intervall (Minuten)",
+      "help":"Wie oft wird LogDaten.dat abgerufen und neue Datenpunkte an InfluxDB übertragen? Empfohlen: 15 (entspricht dem Messintervall des PIKO)",
+      "default":15, "min":1, "max":1440, "sm":4
+    },
+    "influxInstance": {
+      "type":"text",
+      "label":"InfluxDB Adapter-Instanz",
+      "help":"Name der installierten InfluxDB-Instanz in ioBroker. Verbindungsdaten (Host, Port, DB, Token) werden dort konfiguriert.",
+      "default":"influxdb.0", "sm":4
+    },
+    "_h5": { "type":"header", "text":"Web-Interface", "size":4 },
+    "webPort": {
+      "type":"number", "label":"Web-UI Port",
+      "help":"Port für das eingebaute Dashboard (Tabs: Daten, Historie, Nodes, Logs, System). Standard: 8092",
+      "default":8092, "min":1024, "max":65535, "sm":4
+    },
+    "_h6": { "type":"header", "text":"Logging", "size":4 },
+    "verbose": {
+      "type":"checkbox", "label":"Ausführliches Logging (Debug)",
+      "default":false, "sm":6
+    }
+  }
+}
