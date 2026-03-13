@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -18,6 +18,10 @@
       "0.3.1": {
         "de": "Bugfix: \"x x x\" gilt fuer beide PIKO-Modelle als Offline-Muster; Energie-Zaehler (Gesamtenergie, Tagesenergie) werden auch im Offline-Zustand korrekt gelesen und nicht auf 0 gesetzt",
         "en": "Bugfix: \"x x x\" offline pattern applies to both PIKO models; energy counters (total, daily) are always read correctly and not zeroed when inverter is offline"
+      },
+      "0.3.2": {
+        "de": "Bugfix: JavaScript als separate /app.js Route serviert statt Inline-Script - behebt Truncation-Problem bei langem HTML",
+        "en": "Bugfix: JavaScript served as separate /app.js route instead of inline script - fixes truncation issue with long HTML"
       }
     },
     "title": "Kostal PIKO",

@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
@@ -190,6 +190,10 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ---
 
 ## Changelog
+
+### 0.3.2 (2026-03-14)
+- **Bugfix:** JavaScript als separate `/app.js` Route serviert statt Inline-Script
+  – behebt das Problem dass Tabs nicht funktionierten weil Node.js lange HTML-Responses abschnitt
 
 ### 0.3.1 (2026-03-14)
 - **Bugfix:** `x x x` Offline-Muster gilt für beide PIKO-Modelle (nicht nur PIKO 5.5)

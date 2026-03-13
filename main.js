@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.1
+ * Version: 0.3.2
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -12,7 +12,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.1';
+const ADAPTER_VERSION = '0.3.2';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -630,6 +630,10 @@ class KostalPikoAdapter extends utils.Adapter {
                 return this._json(res, { ok:true, message:'Vollsync gestartet – alle Datenpunkte werden übertragen' });
             }
             if (p === '/api/ping') return this._json(res, { ok:true, adapter:ADAPTER_NAME, version:ADAPTER_VERSION });
+            if (p === '/app.js') {
+                res.writeHead(200, { 'Content-Type':'application/javascript; charset=utf-8' });
+                return res.end(APP_JS_CODE);
+            }
 
             res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8' });
             res.end(WEB_UI_HTML.replace(/__VERSION__/g, ADAPTER_VERSION));
@@ -883,8 +887,17 @@ tr:hover td{background:rgba(255,255,255,.02)}
 </div>
 
 </main>
-<script>
-(function(){
+<script src="/app.js"></script>
+</body>
+</html>`;
+
+if (require.main !== module) {
+    module.exports = (options) => new KostalPikoAdapter(options);
+} else {
+    new KostalPikoAdapter();
+}
+// ─── App JavaScript (separat gehostet) ──────────────────────────────────────
+const APP_JS_CODE = `(function(){
 var allLogs=[],allNodes={},allData={},histRows=[];
 
 window.showTab=function(n){
@@ -1084,13 +1097,6 @@ function tick(){
 }
 loadData(); loadLogs();
 setInterval(tick,15000);
-})();
-</script>
-</body>
-</html>`;
+})();`;
 
-if (require.main !== module) {
-    module.exports = (options) => new KostalPikoAdapter(options);
-} else {
-    new KostalPikoAdapter();
-}
+
