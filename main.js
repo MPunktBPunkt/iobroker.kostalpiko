@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.2.0
+ * Version: 0.3.1
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -12,7 +12,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.2.0';
+const ADAPTER_VERSION = '0.3.1';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -401,40 +401,79 @@ class KostalPikoAdapter extends utils.Adapter {
     }
 
     // ─── Parser: Hauptseite (index.fhtml) ────────────────────────────────────────
+    // Unterstützt PIKO 8.3 (2 Strings, leere Zellen=offline) und
+    // PIKO 5.5 (3 Strings, "x x x" in Zellen=offline)
 
     _parseMainPage(html) {
+        // Alle bgcolor="#FFFFFF" Zellen sammeln (inkl. leere)
         const cells = [];
-        const re    = /bgcolor="#FFFFFF">\s*([^<\s][^<]*?)\s*<\/td>/gi;
+        const re    = /bgcolor="#FFFFFF">\s*([\s\S]*?)\s*<\/td>/gi;
         let m;
         while ((m = re.exec(html)) !== null) cells.push(m[1].trim());
 
-        const statusMatch = html.match(/Status<\/td>\s*<td colspan="4">\s*([^<]+?)\s*<\/td>/i);
+        // Status lesen
+        const statusMatch = html.match(/Status<\/td>\s*<td[^>]*>\s*([^<]+?)\s*<\/td>/i);
         const status      = statusMatch ? statusMatch[1].trim() : null;
-        const isOn        = status && status !== '' && status.toLowerCase() !== 'aus';
 
-        const n = (s) => { if (!s) return null; const v = parseFloat(s.replace(',','.')); return isNaN(v) ? null : v; };
+        // Offline-Erkennung: beide PIKO-Modelle zeigen "x x x" in den
+        // Messpunkt-Zellen wenn der Inverter aus ist (Status: "Aus").
+        // Energie-Zähler (cells[1], cells[2]) zeigen aber immer echte Werte!
+        const isXxx = (s) => /^x\s+x\s+x$/i.test(s || '');
+        const isOff = !status || status.toLowerCase() === 'aus' || cells.some(c => isXxx(c));
+        const isOn  = !isOff;
 
-        const result = { status: status || 'Aus', online: isOn ? 1 : 0 };
+        // Strings auto-detektieren anhand Zellenanzahl:
+        //   2 Strings (PIKO 8.3) → 13 Zellen
+        //   3 Strings (PIKO 5.5) → 15 Zellen
+        const has3Strings = cells.length >= 15;
+        const acOffset    = has3Strings ? 2 : 0;
+
+        // Messwert-Parser: "x x x" → 0, leere Zellen → 0, Zahlen → float
+        const toNum = (s) => {
+            if (!s || isXxx(s) || s === '&nbsp;') return 0;
+            const v = parseFloat(s.replace(',', '.'));
+            return isNaN(v) ? 0 : v;
+        };
+        // Energie-Parser: immer auslesen, auch wenn offline
+        const toEnergy = (s) => {
+            if (!s || isXxx(s)) return null; // null = nicht updaten
+            const v = parseFloat(s.replace(',', '.'));
+            return isNaN(v) ? null : v;
+        };
+
+        const result = {
+            status           : status || 'Aus',
+            online           : isOn ? 1 : 0,
+            'device.strings' : has3Strings ? 3 : 2,
+        };
+
         if (cells.length >= 10) {
-            result['ac.power']           = n(cells[0]);
-            result['energy.total']       = n(cells[1]);
-            result['energy.today']       = n(cells[2]);
-            result['pv.string1.voltage'] = n(cells[3]);
-            result['pv.string1.current'] = n(cells[4]);
-            result['pv.string2.voltage'] = n(cells[5]);
-            result['pv.string2.current'] = n(cells[6]);
-            result['ac.l1.voltage']      = n(cells[7]);
-            result['ac.l1.power']        = n(cells[8]);
-            result['ac.l2.voltage']      = n(cells[9]);
-            result['ac.l2.power']        = n(cells[10]);
-            result['ac.l3.voltage']      = n(cells[11] || null);
-            result['ac.l3.power']        = n(cells[12] || null);
-        }
-        if (!isOn) {
-            for (const k of Object.keys(result)) {
-                if (k !== 'status' && k !== 'online') result[k] = 0;
+            // Energie immer speichern (zeigt echte Werte auch wenn offline)
+            const eTot = toEnergy(cells[1]);
+            const eDay = toEnergy(cells[2]);
+            if (eTot !== null) result['energy.total'] = eTot;
+            if (eDay !== null) result['energy.today'] = eDay;
+
+            // Leistungs-Messwerte: bei offline immer 0
+            result['ac.power']           = isOn ? toNum(cells[0]) : 0;
+            result['pv.string1.voltage'] = isOn ? toNum(cells[3]) : 0;
+            result['pv.string1.current'] = isOn ? toNum(cells[4]) : 0;
+            result['pv.string2.voltage'] = isOn ? toNum(cells[5]) : 0;
+            result['pv.string2.current'] = isOn ? toNum(cells[6]) : 0;
+
+            if (has3Strings) {
+                result['pv.string3.voltage'] = isOn ? toNum(cells[7]) : 0;
+                result['pv.string3.current'] = isOn ? toNum(cells[8]) : 0;
             }
+
+            result['ac.l1.voltage'] = isOn ? toNum(cells[7  + acOffset]) : 0;
+            result['ac.l1.power']   = isOn ? toNum(cells[8  + acOffset]) : 0;
+            result['ac.l2.voltage'] = isOn ? toNum(cells[9  + acOffset]) : 0;
+            result['ac.l2.power']   = isOn ? toNum(cells[10 + acOffset]) : 0;
+            result['ac.l3.voltage'] = isOn && cells.length > 11 + acOffset ? toNum(cells[11 + acOffset]) : 0;
+            result['ac.l3.power']   = isOn && cells.length > 12 + acOffset ? toNum(cells[12 + acOffset]) : 0;
         }
+
         const busM = html.match(/name="[^"]*[Aa]dr[^"]*"[^>]*value="(\d+)"/i);
         if (busM) result['rs485.busAddress'] = parseInt(busM[1]);
         return result;
@@ -477,6 +516,9 @@ class KostalPikoAdapter extends utils.Adapter {
             { id:'pv.string1.current',        type:'number',  role:'value.current',       name:'String 1 Strom',             def:0, unit:'A' },
             { id:'pv.string2.voltage',        type:'number',  role:'value.voltage',       name:'String 2 Spannung',           def:0, unit:'V' },
             { id:'pv.string2.current',        type:'number',  role:'value.current',       name:'String 2 Strom',             def:0, unit:'A' },
+            { id:'pv.string3.voltage',        type:'number',  role:'value.voltage',       name:'String 3 Spannung',           def:0, unit:'V' },
+            { id:'pv.string3.current',        type:'number',  role:'value.current',       name:'String 3 Strom',             def:0, unit:'A' },
+            { id:'device.strings',            type:'number',  role:'value',               name:'Anzahl PV-Strings (2 oder 3)', def:2 },
             { id:'info.analog1',              type:'number',  role:'value.voltage',       name:'Analoger Eingang 1',          def:0, unit:'V' },
             { id:'info.analog2',              type:'number',  role:'value.voltage',       name:'Analoger Eingang 2',          def:0, unit:'V' },
             { id:'info.analog3',              type:'number',  role:'value.voltage',       name:'Analoger Eingang 3',          def:0, unit:'V' },
@@ -722,6 +764,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="vc"><div class="vl">String 1 &ndash; Strom</div><div class="vv" id="d-s1a">--</div><div class="vu">A</div></div>
       <div class="vc"><div class="vl">String 2 &ndash; Spannung</div><div class="vv" id="d-s2v">--</div><div class="vu">V</div></div>
       <div class="vc"><div class="vl">String 2 &ndash; Strom</div><div class="vv" id="d-s2a">--</div><div class="vu">A</div></div>
+      <div class="vc" id="card-s3v" style="display:none"><div class="vl">String 3 &ndash; Spannung</div><div class="vv" id="d-s3v">--</div><div class="vu">V</div></div>
+      <div class="vc" id="card-s3a" style="display:none"><div class="vl">String 3 &ndash; Strom</div><div class="vv" id="d-s3a">--</div><div class="vu">A</div></div>
     </div>
   </div>
   <div class="card">
@@ -856,9 +900,9 @@ window.showTab=function(n){
   if(n==='history') loadHistory();
 };
 
-/* ── Live-Daten ── */
+/* \u2500\u2500 Live-Daten \u2500\u2500 */
 window.loadData=function(){
-  fetch('/api/data').then(function(r){return r.json()}).then(function(j){
+  fetch(window.location.origin+'/api/data').then(function(r){return r.json()}).then(function(j){
     allData=j.data||{}; allNodes=j.nodes||{};
     var on=allData.online===1;
     document.getElementById('sdot').className='sd'+(on?' on':'');
@@ -869,6 +913,11 @@ window.loadData=function(){
     s('d-acp','ac.power'); s('d-etot','energy.total'); s('d-eday','energy.today');
     s('d-s1v','pv.string1.voltage'); s('d-s1a','pv.string1.current',2);
     s('d-s2v','pv.string2.voltage'); s('d-s2a','pv.string2.current',2);
+    s('d-s3v','pv.string3.voltage'); s('d-s3a','pv.string3.current',2);
+    var has3=(allData['device.strings']===3);
+    ['card-s3v','card-s3a'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.style.display=has3?'':'none';
+    });
     s('d-l1v','ac.l1.voltage'); s('d-l1p','ac.l1.power');
     s('d-l2v','ac.l2.voltage'); s('d-l2p','ac.l2.power');
     s('d-l3v','ac.l3.voltage'); s('d-l3p','ac.l3.power');
@@ -879,9 +928,9 @@ window.loadData=function(){
   }).catch(function(){});
 };
 
-/* ── History ── */
+/* \u2500\u2500 History \u2500\u2500 */
 window.loadHistory=function(){
-  fetch('/api/history').then(function(r){return r.json()}).then(function(j){
+  fetch(window.location.origin+'/api/history').then(function(r){return r.json()}).then(function(j){
     histRows=j.rows||[];
     document.getElementById('h-cnt').textContent=j.recordCount||0;
     document.getElementById('h-ep').textContent=j.pikoEpoch?j.pikoEpoch.substring(0,10):'--';
@@ -950,31 +999,31 @@ function renderSparklines(){
 window.triggerSync=function(){
   var msg=document.getElementById('syncMsg');
   if(msg) msg.textContent='Sync wird gestartet...';
-  fetch('/api/trigger-history').then(function(){
-    if(msg) msg.textContent='Sync läuft – neue Datenpunkte werden übertragen. Seite in ca. 10 s neu laden.';
+  fetch(window.location.origin+'/api/trigger-history').then(function(){
+    if(msg) msg.textContent='Sync l\u00e4uft \u2013 neue Datenpunkte werden \u00fcbertragen. Seite in ca. 10 s neu laden.';
     setTimeout(loadHistory, 8000);
   }).catch(function(e){ if(msg) msg.textContent='Fehler: '+e.message; });
 };
 
 window.confirmSyncAll=function(){
-  if(!confirm('Sync-All: Alle Datenpunkte der letzten ~6 Monate werden an InfluxDB übertragen.\n\nDas kann je nach Datenmenge einige Minuten dauern.\n\nFortfahren?')) return;
+  if(!confirm('Sync-All: Alle Datenpunkte der letzten ~6 Monate werden an InfluxDB \u00fcbertragen.\n\nDas kann je nach Datenmenge einige Minuten dauern.\n\nFortfahren?')) return;
   var msg=document.getElementById('syncMsg');
-  if(msg) msg.textContent='Vollsync gestartet – bitte warten, das kann einige Minuten dauern...';
+  if(msg) msg.textContent='Vollsync gestartet \u2013 bitte warten, das kann einige Minuten dauern...';
   var btn=document.getElementById('btnSyncAll');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Läuft...'; }
-  fetch('/api/sync-all').then(function(){
-    if(msg) msg.textContent='Vollsync läuft. Seite in ca. 30 s aktualisieren.';
+  if(btn){ btn.disabled=true; btn.textContent='\u23F3 L\u00e4uft...'; }
+  fetch(window.location.origin+'/api/sync-all').then(function(){
+    if(msg) msg.textContent='Vollsync l\u00e4uft. Seite in ca. 30 s aktualisieren.';
     setTimeout(function(){
       loadHistory();
-      if(btn){ btn.disabled=false; btn.textContent='★ Sync-All (gesamte Historie)'; }
+      if(btn){ btn.disabled=false; btn.textContent='\u2605 Sync-All (gesamte Historie)'; }
     }, 30000);
   }).catch(function(e){
     if(msg) msg.textContent='Fehler: '+e.message;
-    if(btn){ btn.disabled=false; btn.textContent='★ Sync-All (gesamte Historie)'; }
+    if(btn){ btn.disabled=false; btn.textContent='\u2605 Sync-All (gesamte Historie)'; }
   });
 };
 
-/* ── Nodes ── */
+/* \u2500\u2500 Nodes \u2500\u2500 */
 window.renderNodes=function(){
   var tb=document.getElementById('nTb'), keys=Object.keys(allNodes).sort();
   if(!keys.length){tb.innerHTML='<tr><td colspan="5" style="color:var(--mut);text-align:center;padding:16px">Daten-Tab zuerst \u00f6ffnen</td></tr>';return;}
@@ -989,9 +1038,9 @@ window.renderNodes=function(){
   }).join('');
 };
 
-/* ── Logs ── */
+/* \u2500\u2500 Logs \u2500\u2500 */
 window.loadLogs=function(){
-  fetch('/api/logs').then(function(r){return r.json()}).then(function(j){allLogs=j.logs||[];renderLogs()});
+  fetch(window.location.origin+'/api/logs').then(function(r){return r.json()}).then(function(j){allLogs=j.logs||[];renderLogs()});
 };
 window.renderLogs=function(){
   var f=document.getElementById('lvlF').value, c=document.getElementById('lWrap');
@@ -1004,9 +1053,9 @@ window.renderLogs=function(){
   if(document.getElementById('aScrl').checked) c.scrollTop=c.scrollHeight;
 };
 
-/* ── System ── */
+/* \u2500\u2500 System \u2500\u2500 */
 window.loadSystem=function(){
-  fetch('/api/status').then(function(r){return r.json()}).then(function(s){
+  fetch(window.location.origin+'/api/status').then(function(r){return r.json()}).then(function(s){
     function row(k,v){return '<div class="sr"><span class="sk">'+k+'</span><span class="sv">'+v+'</span></div>';}
     document.getElementById('sysInfo').innerHTML=[
       row('Adapter', s.adapter),
@@ -1017,7 +1066,7 @@ window.loadSystem=function(){
     ].join('');
     document.getElementById('sysHist').innerHTML=[
       row('Sync aktiviert', s.historyEnable?'<span class="chip ck">ja</span>':'<span class="chip ce">nein (in Einstellungen aktivieren)</span>'),
-      row('Sync-Intervall', s.historyEnable?s.syncInterval+' Minuten':'–'),
+      row('Sync-Intervall', s.historyEnable?s.syncInterval+' Minuten':'\u2013'),
       row('InfluxDB-Instanz', '<code>'+s.influxInst+'</code>'),
       row('PIKO Inbetriebnahme', s.pikoEpoch?s.pikoEpoch.substring(0,10):'noch nicht ermittelt'),
       row('Letzter Sync', s.lastImported?new Date(s.lastImported).toLocaleString('de-DE'):'noch kein Sync'),
@@ -1025,7 +1074,7 @@ window.loadSystem=function(){
   });
 };
 
-/* ── Auto-Refresh ── */
+/* \u2500\u2500 Auto-Refresh \u2500\u2500 */
 function tick(){
   var a=document.querySelector('.tc.act');
   if(!a) return;

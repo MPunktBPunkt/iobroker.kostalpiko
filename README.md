@@ -31,13 +31,25 @@ Liest Echtzeit- und Historiendaten vom **Kostal PIKO Solarwechselrichter** direk
 
 ## Installation
 
-### Option A – GitHub (empfohlen)
+### Option A – ioBroker Admin UI (empfohlen, kein Terminal nötig)
 
-```bash
-iobroker add https://github.com/MPunktBPunkt/iobroker.kostalpiko
+Im ioBroker Admin unter **Adapter** auf das 🐙 **Octocat-Icon** klicken → Tab **„ANY"** → folgende URL eintragen:
+
+```
+https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
 ```
 
-### Option B – manuell (offline)
+→ „Installieren" klicken. Danach im Admin unter **Instanzen** eine neue Instanz anlegen und konfigurieren.
+
+### Option B – Kommandozeile
+
+```bash
+cd /opt/iobroker
+npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
+iobroker add kostalpiko
+```
+
+### Option C – manuell (offline)
 
 ```bash
 mkdir -p /opt/iobroker/node_modules/iobroker.kostalpiko

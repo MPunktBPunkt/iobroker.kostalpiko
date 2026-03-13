@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.2.0",
+    "version": "0.3.1",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -10,6 +10,14 @@
       "0.2.0": {
         "de": "LogDaten.dat Parser: 15-min Messreihen mit korrektem Zeitstempel; InfluxDB-Integration via sendTo; History-Tab im Web-UI mit Sparklines; Deduplication-Cursor",
         "en": "LogDaten.dat parser: 15-min time series with correct timestamps; InfluxDB integration via sendTo; History tab in Web-UI with sparklines; deduplication cursor"
+      },
+      "0.3.0": {
+        "de": "PIKO 5.5 Support: 3-String-Erkennung, \"x x x\" Offline-Muster, pv.string3 States; Unicode-Fix im JavaScript (Sonderzeichen als \\uXXXX); fetch-URLs absolut mit window.location.origin",
+        "en": "PIKO 5.5 support: auto-detect 2/3 strings, \"x x x\" offline pattern, pv.string3 states; Unicode escape fix in JavaScript; absolute fetch URLs via window.location.origin"
+      },
+      "0.3.1": {
+        "de": "Bugfix: \"x x x\" gilt fuer beide PIKO-Modelle als Offline-Muster; Energie-Zaehler (Gesamtenergie, Tagesenergie) werden auch im Offline-Zustand korrekt gelesen und nicht auf 0 gesetzt",
+        "en": "Bugfix: \"x x x\" offline pattern applies to both PIKO models; energy counters (total, daily) are always read correctly and not zeroed when inverter is offline"
       }
     },
     "title": "Kostal PIKO",
