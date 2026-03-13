@@ -1,0 +1,108 @@
+{
+  "common": {
+    "name": "kostalpiko",
+    "version": "0.2.0",
+    "news": {
+      "0.1.0": {
+        "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
+        "de": "Erstveröffentlichung – HTTP-Scraping des Kostal PIKO Wechselrichters"
+      },
+      "0.2.0": {
+        "de": "LogDaten.dat Parser: 15-min Messreihen mit korrektem Zeitstempel; InfluxDB-Integration via sendTo; History-Tab im Web-UI mit Sparklines; Deduplication-Cursor",
+        "en": "LogDaten.dat parser: 15-min time series with correct timestamps; InfluxDB integration via sendTo; History tab in Web-UI with sparklines; deduplication cursor"
+      }
+    },
+    "title": "Kostal PIKO",
+    "titleLang": {
+      "de": "Kostal PIKO Wechselrichter",
+      "en": "Kostal PIKO Inverter"
+    },
+    "desc": {
+      "de": "Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping.",
+      "en": "Reads real-time and history data from Kostal PIKO inverter via HTTP scraping."
+    },
+    "authors": [
+      "MPunktBPunkt"
+    ],
+    "keywords": [
+      "kostal",
+      "piko",
+      "solar",
+      "inverter",
+      "photovoltaik",
+      "wechselrichter"
+    ],
+    "license": "MIT",
+    "icon": "admin/kostal-piko-icon.svg",
+    "type": "general",
+    "mode": "daemon",
+    "platform": "Javascript/Node.js",
+    "main": "main.js",
+    "enabled": true,
+    "readme": "https://github.com/MPunktBPunkt/iobroker.kostalpiko/blob/main/README.md",
+    "loglevel": "info",
+    "messagebox": false,
+    "connectionType": "local",
+    "dataSource": "poll",
+    "adminUI": {
+      "config": "json"
+    },
+    "dependencies": [
+      {
+        "js-controller": ">=3.0.0"
+      }
+    ],
+    "nodeProcessParams": [],
+    "stopBeforeUpdate": true,
+    "allowInit": true
+  },
+  "native": {
+    "ip": "192.168.178.30",
+    "port": 80,
+    "user": "pvserver",
+    "password": "pvwr",
+    "pollInterval": 30,
+    "historyFetch": false,
+    "syncInterval": 15,
+    "influxInstance": "influxdb.0",
+    "webPort": 8092,
+    "verbose": false
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Adapter-Informationen"
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "name": "Verbunden",
+        "type": "boolean",
+        "role": "indicator.connected",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.lastPoll",
+      "type": "state",
+      "common": {
+        "name": "Letzter Poll",
+        "type": "string",
+        "role": "date",
+        "read": true,
+        "write": false,
+        "def": ""
+      },
+      "native": {}
+    }
+  ]
+}
