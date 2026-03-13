@@ -1,0 +1,36 @@
+{
+  "name": "iobroker.kostalpiko",
+  "version": "0.2.0",
+  "description": "ioBroker Adapter für den Kostal PIKO Wechselrichter (HTTP-Scraping)",
+  "author": "MPunktBPunkt",
+  "license": "MIT",
+  "main": "main.js",
+  "keywords": [
+    "iobroker",
+    "kostal",
+    "piko",
+    "solar",
+    "photovoltaik",
+    "wechselrichter"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MPunktBPunkt/iobroker.kostalpiko"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "scripts": {
+    "test": "echo 'Keine Tests definiert'",
+    "start": "node main.js"
+  },
+  "dependencies": {
+    "@iobroker/adapter-core": "^3.0.0"
+  },
+  "devDependencies": {},
+  "bugs": {
+    "url": "https://github.com/MPunktBPunkt/iobroker.kostalpiko/issues"
+  },
+  "homepage": "https://github.com/MPunktBPunkt/iobroker.kostalpiko#readme",
+  "readmeFilename": "README.md"
+}
