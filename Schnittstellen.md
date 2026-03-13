@@ -1,6 +1,6 @@
-# Schnittstellen – iobroker.kostalpiko v0.2.0
+# Schnittstellen – iobroker.kostalpiko v0.3.1
 
-> Technische Dokumentation aller Schnittstellen. Stand: 2026-03-13
+> Technische Dokumentation aller Schnittstellen. Stand: 2026-03-14
 
 ---
 
@@ -231,7 +231,7 @@ Port: `8092` (konfigurierbar). Kein Login erforderlich.
 | Route | Response-Inhalt |
 |---|---|
 | `GET /` | Web-UI HTML (Single Page, 5 Tabs) |
-| `GET /api/ping` | `{"ok":true,"adapter":"kostalpiko","version":"0.2.0"}` |
+| `GET /api/ping` | `{"ok":true,"adapter":"kostalpiko","version":"0.3.1"}` |
 | `GET /api/data` | `{data:{...}, nodes:{...}, ts:"ISO"}` |
 | `GET /api/history` | `{rows:[...], pikoEpoch:"ISO", recordCount:N, lastImported:"ISO"}` |
 | `GET /api/logs` | `{logs:[{ts,level,message},...]}` |
@@ -265,7 +265,7 @@ Port: `8092` (konfigurierbar). Kein Login erforderlich.
 ```json
 {
   "adapter"      : "kostalpiko",
-  "version"      : "0.2.0",
+  "version"      : "0.3.1",
   "ip"           : "192.168.178.30",
   "port"         : 80,
   "interval"     : 30,

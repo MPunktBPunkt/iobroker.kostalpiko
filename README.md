@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
@@ -12,20 +12,22 @@ Liest Echtzeit- und Historiendaten vom **Kostal PIKO Solarwechselrichter** direk
 
 - ☀️ **HTTP-Scraping** – direkte Anbindung an den PIKO-Webserver, kein Cloud-Zwang
 - ⚡ **Echtzeit-Messwerte** – AC-Leistung, PV-Strings, L1/L2/L3, Energie, Status
-- 🔌 **Offline-Erkennung** – erkennt wenn der Wechselrichter nachts aus ist
+- 🔌 **Offline-Erkennung** – `x x x` Muster im HTML erkannt; Energie-Zähler bleiben erhalten
 - 📊 **Historiendaten** – LogDaten.dat (CSV, 15-min-Intervall, ~6 Monate)
 - 🕐 **Korrekter Zeitstempel** – dekodiert den PIKO-internen Uptime-Zähler in echte Unix-Timestamps
 - 📤 **InfluxDB-Integration** – sendet History-Daten via `sendTo()` mit historischem Zeitstempel
 - 🔄 **Sync-All** – überträgt die gesamte gespeicherte Historie auf Knopfdruck
 - 🌐 **Web-UI** – eingebautes Dashboard mit 5 Tabs: Daten, Historie, Nodes, Logs, System
+- 🔢 **Multi-String** – automatische Erkennung von 2 oder 3 PV-Strings (PIKO 8.3 / PIKO 5.5)
 
 ---
 
 ## Getestete Hardware
 
-| Modell | Firmware | Status |
-|---|---|---|
-| PIKO 8.3 | ver 3.62 | ✅ Getestet |
+| Modell | Firmware | Strings | Status |
+|---|---|---|---|
+| PIKO 8.3 | ver 3.62 | 2 | ✅ Getestet |
+| PIKO 5.5 | ver 3.62 | 3 | ✅ Getestet |
 
 ---
 
@@ -43,22 +45,51 @@ https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
 
 ### Option B – Kommandozeile
 
+> ⚠️ **Wichtig:** Den Befehl **nicht** als `root` ausführen, sondern als `iobroker`-User:
+
 ```bash
-cd /opt/iobroker
-npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
+sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
 iobroker add kostalpiko
 ```
+
+> Hintergrund: ioBroker sperrt `npm`-Aufrufe als `root` aus Sicherheitsgründen mit der Meldung  
+> `Sorry, user root is not allowed to execute ... npm install ... as iobroker`.  
+> Der `sudo -u iobroker` Prefix umgeht das sauber.
 
 ### Option C – manuell (offline)
 
 ```bash
 mkdir -p /opt/iobroker/node_modules/iobroker.kostalpiko
-# Dateien in diesen Ordner kopieren (USB, SCP, WinSCP …)
+# Alle Dateien aus dem ZIP nach /opt/iobroker/node_modules/iobroker.kostalpiko/ kopieren
 cd /opt/iobroker/node_modules/iobroker.kostalpiko
 npm install
 cd /opt/iobroker
 iobroker add kostalpiko
 ```
+
+---
+
+## Update
+
+```bash
+sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
+iobroker restart kostalpiko.0
+```
+
+Oder alternativ über die Admin UI: Octocat-Icon → Tab „ANY" → gleiche URL → Installieren → Instanz neu starten.
+
+---
+
+## Mehrere Wechselrichter (Multi-Instanz)
+
+Jede Instanz verwaltet einen eigenen Wechselrichter mit vollständig getrennten Datenpunkten:
+
+| Instanz | Namespace | IP | Web-UI Port |
+|---|---|---|---|
+| kostalpiko.0 | `kostalpiko.0.*` | 192.168.178.30 (PIKO 8.3) | 8092 |
+| kostalpiko.1 | `kostalpiko.1.*` | 192.168.178.31 (PIKO 5.5) | 8093 |
+
+Für die zweite Instanz einfach im Admin **„+ Instanz hinzufügen"** klicken und einen anderen Web-UI Port einstellen.
 
 ---
 
@@ -94,13 +125,15 @@ info.connection           – Adapter verbunden (boolean)
 info.lastPoll             – Letzter Poll-Zeitpunkt (ISO-8601)
 status                    – Betriebsstatus ("Einspeisen MPP" / "Aus" / ...)
 online                    – 1 = läuft, 0 = offline/Nacht
+device.strings            – Anzahl PV-Strings (2 oder 3, auto-erkannt)
 ac.power                  – AC-Gesamtleistung aktuell (W)
 ac.l1/l2/l3.voltage       – Phasenspannungen (V)
 ac.l1/l2/l3.power         – Phasenleistungen (W)
-energy.total              – Gesamtenergie (kWh)
-energy.today              – Tagesenergie (kWh)
+energy.total              – Gesamtenergie (kWh) – auch nachts gültig
+energy.today              – Tagesenergie (kWh)  – auch nachts gültig
 pv.string1/2.voltage      – PV-String-Spannungen (V)
 pv.string1/2.current      – PV-String-Ströme (A)
+pv.string3.voltage/current – nur PIKO 5.5 (3 Strings)
 info.analog1–4            – Analoge Eingänge (V)
 info.modemStatus
 info.lastPortalConnection
@@ -142,20 +175,33 @@ http://IOBROKER-IP:8092/
 
 ### Sync-Aktionen im Web-UI
 
-- **„Neue Punkte synchronisieren"** – überträgt nur Datenpunkte, die seit dem letzten Sync neu sind
-- **„Sync-All (gesamte Historie)"** – setzt den Cursor zurück und überträgt alle ~6 Monate auf einmal (Bestätigungs-Dialog, kann einige Minuten dauern)
+- **„Neue Punkte synchronisieren"** – überträgt nur Datenpunkte seit dem letzten Sync
+- **„Sync-All (gesamte Historie)"** – setzt den Cursor zurück und überträgt alle ~6 Monate (Bestätigungs-Dialog, kann einige Minuten dauern)
 
 ---
 
 ## Firewall (falls nötig)
 
 ```bash
-sudo ufw allow 8092/tcp
+sudo ufw allow 8092/tcp   # Instanz 0 (PIKO 8.3)
+sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ```
 
 ---
 
 ## Changelog
+
+### 0.3.1 (2026-03-14)
+- **Bugfix:** `x x x` Offline-Muster gilt für beide PIKO-Modelle (nicht nur PIKO 5.5)
+- **Bugfix:** `energy.total` und `energy.today` werden auch im Offline-Zustand korrekt gelesen und nicht auf 0 gesetzt
+
+### 0.3.0 (2026-03-14)
+- **NEU:** PIKO 5.5 Support – automatische Erkennung von 2 oder 3 PV-Strings
+- **NEU:** `pv.string3.voltage/current` States für 3-String-Wechselrichter
+- **NEU:** `device.strings` State zeigt Anzahl erkannter Strings
+- **NEU:** String 3 Cards im Web-UI erscheinen automatisch bei PIKO 5.5
+- **Bugfix:** JavaScript-Sonderzeichen als `\uXXXX` escaped → Tabs funktionieren
+- **Bugfix:** `fetch()`-URLs absolut mit `window.location.origin` → kein Proxy-Problem mehr
 
 ### 0.2.0 (2026-03-13)
 - **NEU:** LogDaten.dat Parser – PIKO-Epoch-Berechnung (`fetchUnixSec − akt. Zeit`)
@@ -164,13 +210,12 @@ sudo ufw allow 8092/tcp
 - **NEU:** History-Tab im Web-UI mit Sparklines und Datentabelle
 - **NEU:** Sync-All Button (Vollsync der gesamten ~6-Monats-Historie)
 - **NEU:** System-Tab erklärt wo InfluxDB-Verbindungsdaten konfiguriert werden
-- Alle Strömwerte korrekt von mA in A umgerechnet (Faktor 0.001)
-- Konfigparam `syncInterval` (unified, statt `historyInterval` + `influxEnable`)
+- Alle Stromwerte korrekt von mA in A umgerechnet (Faktor 0.001)
+- Konfigparam `syncInterval` (statt `historyInterval` + `influxEnable`)
 
 ### 0.1.0 (2026-03-13)
 - Erstveröffentlichung
 - HTTP-Scraping: index.fhtml + Inf.fhtml
-- Offline-Erkennung (Status "Aus" → alle Werte = 0)
 - Web-UI: Daten, Nodes, Logs, System
 
 ---

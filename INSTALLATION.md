@@ -1,6 +1,6 @@
 # Installation – iobroker.kostalpiko
 
-Dieser Adapter ist **nicht im offiziellen ioBroker-Repository** enthalten und muss daher manuell installiert werden. Es gibt drei Wege.
+Dieser Adapter ist **nicht im offiziellen ioBroker-Repository** enthalten und muss manuell installiert werden.
 
 ---
 
@@ -9,75 +9,52 @@ Dieser Adapter ist **nicht im offiziellen ioBroker-Repository** enthalten und mu
 Kein Terminal erforderlich, funktioniert direkt im Browser.
 
 1. ioBroker Admin öffnen → **Adapter**-Tab
-2. Oben rechts auf das **🐙 Octocat-Icon** klicken  
-   *(„Adapter von eigener URL installieren")*
+2. Oben rechts auf das 🐙 **Octocat-Icon** klicken
 3. Tab **„ANY"** auswählen
-4. Folgende URL eintragen:
+4. URL eintragen:
    ```
    https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
    ```
 5. **„Installieren"** klicken und warten (~30 Sekunden)
-6. Nach der Installation erscheint der Adapter in der Liste  
-   → Auf **„+ Instanz hinzufügen"** klicken
-7. Instanz konfigurieren (IP-Adresse des PIKO, Intervall, InfluxDB-Instanz)
-8. Instanz starten
+6. Instanz anlegen → konfigurieren → starten
 
-> ⚠️ **Wichtig:** Verwende die URL mit `/tarball/main/` am Ende – nur so liefert GitHub ein installierbares Paket. Die normale Repo-URL `https://github.com/.../iobroker.kostalpiko` funktioniert **nicht**.
+> ⚠️ Die URL muss `/tarball/main/` am Ende haben. Die normale Repo-URL funktioniert nicht.
 
 ---
 
-## Methode B – Kommandozeile (SSH/Terminal)
+## Methode B – Kommandozeile
+
+> ⚠️ **Bekanntes Problem bei der Erstinstallation:**  
+> ioBroker sperrt `npm`-Aufrufe als `root`-User mit der Fehlermeldung:
+> ```
+> Sorry, user root is not allowed to execute '...npm install...' as iobroker
+> ```
+> **Lösung:** Den Befehl als `iobroker`-User ausführen:
 
 ```bash
-# 1. In das ioBroker-Verzeichnis wechseln
-cd /opt/iobroker
-
-# 2. Adapter von GitHub installieren
-npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
-
-# 3. Adapter bei ioBroker registrieren und erste Instanz anlegen
+sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
 iobroker add kostalpiko
-
-# 4. Adapter starten
 iobroker start kostalpiko.0
 ```
 
-Im ioBroker-Log sollte erscheinen:
+Im ioBroker-Log sollte danach erscheinen:
 ```
-[SYSTEM] Kostal PIKO Adapter v0.2.0 gestartet
+[SYSTEM] Kostal PIKO Adapter v0.3.1 gestartet
 [SYSTEM] Web-UI: http://0.0.0.0:8092/
 ```
 
 ---
 
-## Methode C – Offline / manuell (ohne Internet)
-
-Für Installationen ohne Internetzugang auf dem ioBroker-Server.
+## Methode C – Offline / manuell
 
 ```bash
-# 1. Zielordner anlegen
 mkdir -p /opt/iobroker/node_modules/iobroker.kostalpiko
-
-# 2. Dateien kopieren (USB-Stick, SCP, WinSCP …)
-#    Alle Dateien aus dem ZIP in folgenden Ordner:
-#    /opt/iobroker/node_modules/iobroker.kostalpiko/
-#
-#    Benötigte Dateien:
-#      main.js
-#      io-package.json
-#      package.json
-#      admin/jsonConfig.json
-#      admin/kostal-piko-icon.svg
-
-# 3. Abhängigkeiten installieren
+# Dateien nach /opt/iobroker/node_modules/iobroker.kostalpiko/ kopieren
+#   Benötigt: main.js, io-package.json, package.json, admin/
 cd /opt/iobroker/node_modules/iobroker.kostalpiko
 npm install
-
-# 4. Adapter registrieren
 cd /opt/iobroker
 iobroker add kostalpiko
-
-# 5. Starten
 iobroker start kostalpiko.0
 ```
 
@@ -85,27 +62,33 @@ iobroker start kostalpiko.0
 
 ## Update
 
-### Über Admin UI
-
-Gleicher Weg wie bei der Installation (Methode A) – einfach die URL erneut eintragen. Die bestehende Instanz-Konfiguration bleibt erhalten.
-
-### Über Kommandozeile
+### Kommandozeile (empfohlen)
 
 ```bash
-cd /opt/iobroker
-npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
+sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
 iobroker restart kostalpiko.0
 ```
 
+Bei mehreren Instanzen alle neu starten:
+```bash
+iobroker restart kostalpiko.0
+iobroker restart kostalpiko.1
+```
+
+### Admin UI
+
+Octocat-Icon → Tab „ANY" → gleiche URL eintragen → Installieren → Instanz(en) neu starten.
+
 ---
 
-## Firewall
+## Zweite Instanz (zweiter Wechselrichter)
 
-Falls das Web-UI von anderen Geräten im Netzwerk erreichbar sein soll:
+Im Admin **Adapter → Kostal PIKO → „+ Instanz hinzufügen"** klicken.  
+Wichtig: einen anderen **Web-UI Port** einstellen, z. B. `8093` für die zweite Instanz.
 
-```bash
-sudo ufw allow 8092/tcp
-```
+Die Datenpunkte sind vollständig getrennt:
+- `kostalpiko.0.*` → erster Wechselrichter
+- `kostalpiko.1.*` → zweiter Wechselrichter
 
 ---
 
@@ -115,4 +98,13 @@ sudo ufw allow 8092/tcp
 iobroker del kostalpiko.0      # Instanz löschen
 iobroker del kostalpiko        # Adapter deregistrieren
 npm uninstall iobroker.kostalpiko --prefix /opt/iobroker
+```
+
+---
+
+## Firewall
+
+```bash
+sudo ufw allow 8092/tcp   # Instanz 0
+sudo ufw allow 8093/tcp   # Instanz 1 (falls vorhanden)
 ```
