@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.4-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
@@ -109,6 +109,9 @@ Im ioBroker Admin unter **Adapter → Kostal PIKO → Instanz konfigurieren**:
 | InfluxDB-Instanz | `influxdb.0` | Name der InfluxDB-Adapter-Instanz |
 | Web-UI Port | `8092` | Port für das eingebaute Dashboard |
 | Verbose Logging | `false` | Debug-Ausgaben aktivieren |
+| **Netzwerk-Modus** | `Lokal` | `Lokal` = direkter Zugriff · `Via iobroker.fritzwireguard` = Zugriff über WireGuard-Tunnel |
+| fritzwireguard-Instanz | `fritzwireguard.0` | Name der fritzwireguard Adapter-Instanz (nur im Tunnel-Modus relevant) |
+| Verbindungs-State | *(leer)* | Optionaler ioBroker State für Tunnel-Status – leer lassen für Auto-Erkennung |
 
 ### InfluxDB-Verbindung
 
@@ -190,6 +193,15 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ---
 
 ## Changelog
+
+### 0.3.4 (2026-03-14)
+- **NEU:** Netzwerk-Modus Einstellung: `Lokal` (direkter Zugriff) oder `Via iobroker.fritzwireguard` (WireGuard-Tunnel)
+- Vor jedem Poll wird der Tunnel-Status geprüft – bei inaktivem Tunnel wird der Poll übersprungen und im Log gemeldet
+- Tunnel läuft dauerhaft im Hintergrund, der Adapter nutzt ihn transparent
+- Neuer State `info.networkMode` zeigt den aktuell genutzten Modus
+
+### 0.3.3 (2026-03-14)
+- **Bugfix:** `app.js` als echte Datei (`admin/app.js`) via `fs.readFileSync` serviert – behebt `SyntaxError: Invalid or unexpected token` durch fehlerhafte `\n`-Interpretation im Node.js Template-Literal
 
 ### 0.3.2 (2026-03-14)
 - **Bugfix:** JavaScript als separate `/app.js` Route serviert statt Inline-Script

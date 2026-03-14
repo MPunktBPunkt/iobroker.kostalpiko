@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.2",
+    "version": "0.3.4",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -22,6 +22,14 @@
       "0.3.2": {
         "de": "Bugfix: JavaScript als separate /app.js Route serviert statt Inline-Script - behebt Truncation-Problem bei langem HTML",
         "en": "Bugfix: JavaScript served as separate /app.js route instead of inline script - fixes truncation issue with long HTML"
+      },
+      "0.3.3": {
+        "de": "Bugfix: app.js als echte Datei (admin/app.js) via fs.readFileSync - behebt SyntaxError durch falsche Backslash-Interpretation im Node.js Template-Literal",
+        "en": "Bugfix: app.js served from real file (admin/app.js) via fs.readFileSync - fixes SyntaxError caused by backslash misinterpretation in Node.js template literal"
+      },
+      "0.3.4": {
+        "de": "NEU: Netzwerk-Modus Lokal/Via fritzwireguard – Tunnel-Status wird vor jedem Poll geprueft, bei fehlendem Tunnel wird Poll uebersprungen und geloggt",
+        "en": "NEW: Network mode Local/Via fritzwireguard – tunnel status checked before each poll, poll skipped and logged when tunnel is inactive"
       }
     },
     "title": "Kostal PIKO",
@@ -78,7 +86,10 @@
     "syncInterval": 15,
     "influxInstance": "influxdb.0",
     "webPort": 8092,
-    "verbose": false
+    "verbose": false,
+    "networkMode": "local",
+    "fritzwgInstance": "fritzwireguard.0",
+    "fritzwgConnectedState": ""
   },
   "objects": [],
   "instanceObjects": [
