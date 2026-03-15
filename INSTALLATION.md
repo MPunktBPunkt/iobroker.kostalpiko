@@ -39,7 +39,7 @@ iobroker start kostalpiko.0
 
 Im ioBroker-Log sollte danach erscheinen:
 ```
-[SYSTEM] Kostal PIKO Adapter v0.3.4 gestartet
+[SYSTEM] Kostal PIKO Adapter v0.3.7 gestartet
 [SYSTEM] Web-UI: http://0.0.0.0:8092/
 ```
 

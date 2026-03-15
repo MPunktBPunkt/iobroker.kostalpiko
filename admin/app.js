@@ -25,7 +25,7 @@ window.loadData=function(){
     var b=document.getElementById('sBadge'); b.textContent=allData.status||'--'; b.className='sb'+(on?' on':'');
     function s(id,k,dec){var v=allData[k];document.getElementById(id).textContent=v!=null?(dec!=null?Number(v).toFixed(dec):v):'--';}
     s('d-acp','ac.power'); s('d-etot','energy.total'); s('d-eday','energy.today');
-    s('d-s1v','pv.string1.voltage'); s('d-s1a','pv.string1.current',2);
+    s('d-s1v','pv.string1.voltage',0); s('d-s1a','pv.string1.current',2);
     s('d-s2v','pv.string2.voltage'); s('d-s2a','pv.string2.current',2);
     s('d-s3v','pv.string3.voltage'); s('d-s3a','pv.string3.current',2);
     var has3=(allData['device.strings']===3);
@@ -37,8 +37,11 @@ window.loadData=function(){
     s('d-l3v','ac.l3.voltage'); s('d-l3p','ac.l3.power');
     s('d-a1','info.analog1',2); s('d-a2','info.analog2',2); s('d-a3','info.analog3',2); s('d-a4','info.analog4',2);
     document.getElementById('d-modem').textContent=allData['info.modemStatus']||'--';
+    renderStringAnalysis();
     document.getElementById('d-portal').textContent=allData['info.lastPortalConnection']||'--';
     s('d-s0','info.s0Pulses');
+    var mdl=document.getElementById('d-model');
+    if(mdl) mdl.textContent=allData['device.model']||'PIKO';
   }).catch(function(){});
 };
 
@@ -138,6 +141,32 @@ window.confirmSyncAll=function(){
 };
 
 /* \u2500\u2500 Nodes \u2500\u2500 */
+window.renderStringAnalysis=function(){
+  var strings=['1','2','3'];
+  var hasAny=false;
+  strings.forEach(function(n){
+    var ev=allData['string'+n+'.expectedVoltage'];
+    var av=allData['pv.string'+n+'.voltage'];
+    var ep=allData['string'+n+'.expectedPower'];
+    var box=document.getElementById('sa-'+n);
+    if(!box) return;
+    if(!ev||!ep){box.style.display='none';return;}
+    hasAny=true;
+    box.style.display='';
+    var vRatio=av&&ev?(av/ev*100):null;
+    var vColor=vRatio===null?'var(--mut)':vRatio>85?'var(--grn)':vRatio>70?'var(--orn)':'var(--red)';
+    box.innerHTML='<div class="vl">String '+n+' Soll/Ist</div>'+
+      '<div style="font-size:13px;font-weight:700;margin:3px 0">'+
+        '<span style="color:'+vColor+'">'+(av||'--')+'</span>'+
+        ' / <span style="color:var(--mut)">'+(ev||'--')+'</span> V</div>'+
+      '<div style="font-size:10px;color:var(--mut)">Nennleistung: '+ep+' Wp'+
+        (vRatio?' | '+vRatio.toFixed(0)+'% von Voc':'')+
+      '</div>';
+  });
+  var card=document.getElementById('sa-card');
+  if(card) card.style.display=hasAny?'':'none';
+};
+
 window.renderNodes=function(){
   var tb=document.getElementById('nTb'), keys=Object.keys(allNodes).sort();
   if(!keys.length){tb.innerHTML='<tr><td colspan="5" style="color:var(--mut);text-align:center;padding:16px">Daten-Tab zuerst \u00f6ffnen</td></tr>';return;}

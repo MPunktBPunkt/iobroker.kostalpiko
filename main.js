@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.4
+ * Version: 0.3.7
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.4';
+const ADAPTER_VERSION = '0.3.7';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -102,6 +102,14 @@ class KostalPikoAdapter extends utils.Adapter {
             // State-ID des Verbindungsstatus im fritzwireguard-Adapter
             // Typisch: fritzwireguard.0.info.connection oder fritzwireguard.0.connected
             fritzwgConnectedState: (this.config.fritzwgConnectedState || '').trim(),
+            // Modell-Override: 'auto' = aus HTML lesen, sonst z.B. 'piko5.5'
+            pikoModel      : (this.config.pikoModel || 'auto').trim(),
+            // Modul-Konfiguration (optional, für String-Analyse)
+            moduleWp       : parseFloat(this.config.moduleWp)       || 0,
+            moduleVoc      : parseFloat(this.config.moduleVoc)      || 0,
+            string1Modules : parseInt(this.config.string1Modules)   || 0,
+            string2Modules : parseInt(this.config.string2Modules)   || 0,
+            string3Modules : parseInt(this.config.string3Modules)   || 0,
         };
 
         const networkInfo = this._cfg.networkMode === 'fritzwireguard'
@@ -192,6 +200,7 @@ class KostalPikoAdapter extends utils.Adapter {
             await this.setStateAsync('info.connection',  { val: true,  ack: true });
             await this.setStateAsync('info.lastPoll',    { val: new Date().toISOString(), ack: true });
             await this.setStateAsync('info.networkMode', { val: this._cfg.networkMode, ack: true });
+            await this._writeModuleStates();
             if (this._cfg.verbose) this._log('DEBUG', 'Live-Poll OK');
         } catch (err) {
             this._log('ERROR', `Live-Poll: ${err.message}`);
@@ -223,9 +232,12 @@ class KostalPikoAdapter extends utils.Adapter {
         const fetchUnixSec = Math.floor(Date.now() / 1000);
         const raw = await this._fetchPage(POLL_URLS.log);
 
-        // "akt. Zeit" aus Header lesen
-        const m = raw.match(/akt\.\s*Zeit:\s*(\d+)/);
-        if (!m) throw new Error('"akt. Zeit" nicht im Header der LogDaten.dat gefunden');
+        // "akt. Zeit" aus Header lesen (Tab-separiert: "akt. Zeit:\t 495381409")
+        const m = raw.match(/akt\.\s*Zeit[:\s\t]+\s*(\d+)/);
+        if (!m) {
+            const preview = raw.substring(0, 300).replace(/\r/g, '').split('\n').slice(0,5).join(' | ');
+            throw new Error('"akt. Zeit" nicht im Header gefunden. Header-Preview: ' + preview);
+        }
         const aktZeit = parseInt(m[1]);
 
         // PIKO-Epoche berechnen:
@@ -442,11 +454,16 @@ class KostalPikoAdapter extends utils.Adapter {
     }
 
     // ─── Parser: Hauptseite (index.fhtml) ────────────────────────────────────────
-    // Unterstützt PIKO 8.3 (2 Strings, leere Zellen=offline) und
-    // PIKO 5.5 (3 Strings, "x x x" in Zellen=offline)
+    // HTML-Tabelle hat interleaved Struktur: String und L-Phase in DERSELBEN Zeile!
+    // Korrekte Zellenreihenfolge:
+    //   [0]=AC, [1]=GesamtE, [2]=TagE,
+    //   [3]=S1U, [4]=L1U, [5]=S1I, [6]=L1P,   ← String+Phase in gleicher Zeile
+    //   [7]=S2U, [8]=L2U, [9]=S2I, [10]=L2P,
+    //   PIKO 8.3 (2 Strings): [11]=L3U, [12]=L3P
+    //   PIKO 5.5 (3 Strings): [11]=S3U, [12]=L3U, [13]=S3I, [14]=L3P
 
     _parseMainPage(html) {
-        // Alle bgcolor="#FFFFFF" Zellen sammeln (inkl. leere)
+        // Alle bgcolor="#FFFFFF" Zellen in DOM-Reihenfolge sammeln (inkl. leere)
         const cells = [];
         const re    = /bgcolor="#FFFFFF">\s*([\s\S]*?)\s*<\/td>/gi;
         let m;
@@ -456,28 +473,42 @@ class KostalPikoAdapter extends utils.Adapter {
         const statusMatch = html.match(/Status<\/td>\s*<td[^>]*>\s*([^<]+?)\s*<\/td>/i);
         const status      = statusMatch ? statusMatch[1].trim() : null;
 
-        // Offline-Erkennung: beide PIKO-Modelle zeigen "x x x" in den
-        // Messpunkt-Zellen wenn der Inverter aus ist (Status: "Aus").
-        // Energie-Zähler (cells[1], cells[2]) zeigen aber immer echte Werte!
+        // Offline: "x x x" in Messwert-Zellen (beide Modelle)
         const isXxx = (s) => /^x\s+x\s+x$/i.test(s || '');
         const isOff = !status || status.toLowerCase() === 'aus' || cells.some(c => isXxx(c));
         const isOn  = !isOff;
 
-        // Strings auto-detektieren anhand Zellenanzahl:
-        //   2 Strings (PIKO 8.3) → 13 Zellen
-        //   3 Strings (PIKO 5.5) → 15 Zellen
-        const has3Strings = cells.length >= 15;
-        const acOffset    = has3Strings ? 2 : 0;
+        // Modell-Name: aus Config-Override oder HTML lesen
+        let modelName;
+        if (this._cfg && this._cfg.pikoModel !== 'auto') {
+            const modelMap = {
+                'piko3.0':'PIKO 3.0','piko3.6':'PIKO 3.6','piko4.2':'PIKO 4.2',
+                'piko5.5':'PIKO 5.5','piko7.0':'PIKO 7.0','piko8.3':'PIKO 8.3',
+                'piko10.1':'PIKO 10.1',
+            };
+            modelName = modelMap[this._cfg.pikoModel] || 'PIKO';
+        } else {
+            const modelMatch = html.match(/<font[^>]*size="\+3"[^>]*>\s*([\w\s.]+)\s*<br/i) ||
+                               html.match(/>(PIKO\s+[\d.]+)</i);
+            modelName = modelMatch ? modelMatch[1].trim() : 'PIKO';
+        }
 
-        // Messwert-Parser: "x x x" → 0, leere Zellen → 0, Zahlen → float
+        // Strings bestimmen: aus Config-Override oder Auto-Erkennung über Zellenanzahl
+        //   13 Zellen = 2 Strings (PIKO 3.6/4.2/7.0/8.3)
+        //   15 Zellen = 3 Strings (PIKO 5.5/10.1)
+        const modelCfg   = this._cfg ? this._cfg.pikoModel : 'auto';
+        const modelStr3  = ['piko5.5','piko10.1'].includes(modelCfg);
+        const modelStr1  = modelCfg === 'piko3.0';
+        const has3Strings = modelCfg === 'auto' ? cells.length >= 15 : modelStr3;
+
+        // Messwert-Parser
         const toNum = (s) => {
             if (!s || isXxx(s) || s === '&nbsp;') return 0;
             const v = parseFloat(s.replace(',', '.'));
             return isNaN(v) ? 0 : v;
         };
-        // Energie-Parser: immer auslesen, auch wenn offline
         const toEnergy = (s) => {
-            if (!s || isXxx(s)) return null; // null = nicht updaten
+            if (!s || isXxx(s)) return null;
             const v = parseFloat(s.replace(',', '.'));
             return isNaN(v) ? null : v;
         };
@@ -486,33 +517,41 @@ class KostalPikoAdapter extends utils.Adapter {
             status           : status || 'Aus',
             online           : isOn ? 1 : 0,
             'device.strings' : has3Strings ? 3 : 2,
+            'device.model'   : modelName,
         };
 
         if (cells.length >= 10) {
-            // Energie immer speichern (zeigt echte Werte auch wenn offline)
+            result['ac.power'] = isOn ? toNum(cells[0]) : 0;
+
+            // Energie immer lesen (auch offline gültig)
             const eTot = toEnergy(cells[1]);
             const eDay = toEnergy(cells[2]);
             if (eTot !== null) result['energy.total'] = eTot;
             if (eDay !== null) result['energy.today'] = eDay;
 
-            // Leistungs-Messwerte: bei offline immer 0
-            result['ac.power']           = isOn ? toNum(cells[0]) : 0;
-            result['pv.string1.voltage'] = isOn ? toNum(cells[3]) : 0;
-            result['pv.string1.current'] = isOn ? toNum(cells[4]) : 0;
-            result['pv.string2.voltage'] = isOn ? toNum(cells[5]) : 0;
-            result['pv.string2.current'] = isOn ? toNum(cells[6]) : 0;
+            // INTERLEAVED: String und L-Phase in gleicher HTML-Tabellenzeile
+            // cells[3]=S1U, cells[4]=L1U, cells[5]=S1I, cells[6]=L1P
+            // cells[7]=S2U, cells[8]=L2U, cells[9]=S2I, cells[10]=L2P
+            result['pv.string1.voltage'] = isOn ? toNum(cells[3])  : 0;
+            result['ac.l1.voltage']      = isOn ? toNum(cells[4])  : 0;
+            result['pv.string1.current'] = isOn ? toNum(cells[5])  : 0;
+            result['ac.l1.power']        = isOn ? toNum(cells[6])  : 0;
+            result['pv.string2.voltage'] = isOn ? toNum(cells[7])  : 0;
+            result['ac.l2.voltage']      = isOn ? toNum(cells[8])  : 0;
+            result['pv.string2.current'] = isOn ? toNum(cells[9])  : 0;
+            result['ac.l2.power']        = isOn ? toNum(cells[10]) : 0;
 
             if (has3Strings) {
-                result['pv.string3.voltage'] = isOn ? toNum(cells[7]) : 0;
-                result['pv.string3.current'] = isOn ? toNum(cells[8]) : 0;
+                // PIKO 5.5: cells[11]=S3U, cells[12]=L3U, cells[13]=S3I, cells[14]=L3P
+                result['pv.string3.voltage'] = isOn ? toNum(cells[11]) : 0;
+                result['ac.l3.voltage']      = isOn && cells.length > 12 ? toNum(cells[12]) : 0;
+                result['pv.string3.current'] = isOn && cells.length > 13 ? toNum(cells[13]) : 0;
+                result['ac.l3.power']        = isOn && cells.length > 14 ? toNum(cells[14]) : 0;
+            } else {
+                // PIKO 8.3: cells[11]=L3U, cells[12]=L3P (keine String3-Zeile)
+                result['ac.l3.voltage'] = isOn && cells.length > 11 ? toNum(cells[11]) : 0;
+                result['ac.l3.power']   = isOn && cells.length > 12 ? toNum(cells[12]) : 0;
             }
-
-            result['ac.l1.voltage'] = isOn ? toNum(cells[7  + acOffset]) : 0;
-            result['ac.l1.power']   = isOn ? toNum(cells[8  + acOffset]) : 0;
-            result['ac.l2.voltage'] = isOn ? toNum(cells[9  + acOffset]) : 0;
-            result['ac.l2.power']   = isOn ? toNum(cells[10 + acOffset]) : 0;
-            result['ac.l3.voltage'] = isOn && cells.length > 11 + acOffset ? toNum(cells[11 + acOffset]) : 0;
-            result['ac.l3.power']   = isOn && cells.length > 12 + acOffset ? toNum(cells[12 + acOffset]) : 0;
         }
 
         const busM = html.match(/name="[^"]*[Aa]dr[^"]*"[^>]*value="(\d+)"/i);
@@ -534,6 +573,32 @@ class KostalPikoAdapter extends utils.Adapter {
         const sm = html.match(/Anzahl\s+der\s+Energiepulse[^:]*:\s*<b>(\d+)<\/b>/i);
         if (sm) r['info.s0Pulses'] = parseInt(sm[1]);
         return r;
+    }
+
+    // ─── Modul-Analyse: Soll-Werte berechnen ────────────────────────────────────────
+
+    async _writeModuleStates() {
+        const { moduleWp, moduleVoc, string1Modules, string2Modules, string3Modules } = this._cfg;
+        // Nur berechnen wenn Modul-Konfiguration vorhanden
+        if (!moduleVoc || !moduleWp) return;
+
+        const strings = [
+            { id: '1', count: string1Modules },
+            { id: '2', count: string2Modules },
+            { id: '3', count: string3Modules },
+        ];
+
+        for (const s of strings) {
+            if (!s.count) continue;
+            // Soll-Spannung = Voc × Anzahl Module
+            // Hinweis: unter Last sinkt die Spannung auf Vmpp (~0.80-0.85 × Voc)
+            const expectedVoc  = Math.round(moduleVoc * s.count * 10) / 10;
+            const expectedPower = moduleWp * s.count;
+            await this.setStateAsync(`string${s.id}.expectedVoltage`,
+                { val: expectedVoc,   ack: true });
+            await this.setStateAsync(`string${s.id}.expectedPower`,
+                { val: expectedPower, ack: true });
+        }
     }
 
     // ─── States anlegen ──────────────────────────────────────────────────────────
@@ -561,6 +626,7 @@ class KostalPikoAdapter extends utils.Adapter {
             { id:'pv.string3.voltage',        type:'number',  role:'value.voltage',       name:'String 3 Spannung',           def:0, unit:'V' },
             { id:'pv.string3.current',        type:'number',  role:'value.current',       name:'String 3 Strom',             def:0, unit:'A' },
             { id:'device.strings',            type:'number',  role:'value',               name:'Anzahl PV-Strings (2 oder 3)', def:2 },
+            { id:'device.model',              type:'string',  role:'text',                name:'Modell (PIKO 8.3 / PIKO 5.5)',  def:'' },
             { id:'info.analog1',              type:'number',  role:'value.voltage',       name:'Analoger Eingang 1',          def:0, unit:'V' },
             { id:'info.analog2',              type:'number',  role:'value.voltage',       name:'Analoger Eingang 2',          def:0, unit:'V' },
             { id:'info.analog3',              type:'number',  role:'value.voltage',       name:'Analoger Eingang 3',          def:0, unit:'V' },
@@ -569,6 +635,13 @@ class KostalPikoAdapter extends utils.Adapter {
             { id:'info.lastPortalConnection', type:'string',  role:'text',                name:'Letzte Portal-Verbindung',    def:'' },
             { id:'info.s0Pulses',             type:'number',  role:'value',               name:'S0-Energiepulse',             def:0 },
             { id:'rs485.busAddress',          type:'number',  role:'value',               name:'RS485 Bus-Adresse',           def:255 },
+            // Berechnete Soll-Werte (aus Modul-Konfiguration)
+            { id:'string1.expectedVoltage',   type:'number',  role:'value.voltage',       name:'String 1 Soll-Spannung',      def:0, unit:'V' },
+            { id:'string2.expectedVoltage',   type:'number',  role:'value.voltage',       name:'String 2 Soll-Spannung',      def:0, unit:'V' },
+            { id:'string3.expectedVoltage',   type:'number',  role:'value.voltage',       name:'String 3 Soll-Spannung',      def:0, unit:'V' },
+            { id:'string1.expectedPower',     type:'number',  role:'value.power',         name:'String 1 Soll-Leistung',      def:0, unit:'Wp' },
+            { id:'string2.expectedPower',     type:'number',  role:'value.power',         name:'String 2 Soll-Leistung',      def:0, unit:'Wp' },
+            { id:'string3.expectedPower',     type:'number',  role:'value.power',         name:'String 3 Soll-Leistung',      def:0, unit:'Wp' },
         ];
         for (const d of defs) {
             const obj = { type:'state', common:{ name:d.name, type:d.type, role:d.role, read:true, write:false }, native:{} };
@@ -793,7 +866,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
   </div>
   <div class="card" style="display:flex;align-items:center;gap:16px;padding:13px 16px">
     <div><div class="muted" style="margin-bottom:4px">Betriebsstatus</div><span class="sb" id="sBadge">--</span></div>
-    <div style="margin-left:auto;text-align:right"><div class="muted">Modell</div><div style="font-weight:600">PIKO 8.3</div></div>
+    <div style="margin-left:auto;text-align:right"><div class="muted">Modell</div><div style="font-weight:600" id="d-model">--</div></div>
   </div>
   <div class="card">
     <div class="ct"><span class="dot"></span>AC-Leistung &amp; Energie</div>
@@ -814,6 +887,19 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="vc" id="card-s3a" style="display:none"><div class="vl">String 3 &ndash; Strom</div><div class="vv" id="d-s3a">--</div><div class="vu">A</div></div>
     </div>
   </div>
+  <!-- String-Analyse (nur sichtbar wenn Modul-Konfig gesetzt) -->
+  <div class="card" id="sa-card" style="display:none">
+    <div class="ct"><span class="dot"></span>String-Analyse (Soll vs. Ist)</div>
+    <div class="grid g3">
+      <div class="vc" id="sa-1" style="display:none"></div>
+      <div class="vc" id="sa-2" style="display:none"></div>
+      <div class="vc" id="sa-3" style="display:none"></div>
+    </div>
+    <div style="font-size:10px;color:var(--mut);margin-top:8px">
+      Soll-Spannung = Voc &times; Modulanzahl (Leerlauf). Unter Last (MPP) typisch 80&ndash;88&thinsp;% davon.
+    </div>
+  </div>
+
   <div class="card">
     <div class="ct"><span class="dot"></span>Ausgangsleistung L1 / L2 / L3</div>
     <div class="grid g3">

@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.4",
+    "version": "0.3.7",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -30,6 +30,18 @@
       "0.3.4": {
         "de": "NEU: Netzwerk-Modus Lokal/Via fritzwireguard – Tunnel-Status wird vor jedem Poll geprueft, bei fehlendem Tunnel wird Poll uebersprungen und geloggt",
         "en": "NEW: Network mode Local/Via fritzwireguard – tunnel status checked before each poll, poll skipped and logged when tunnel is inactive"
+      },
+      "0.3.5": {
+        "de": "Bugfix: Zellenreihenfolge im HTML-Parser korrigiert (String+Phase sind in derselben Tabellenzeile interleaved); device.model State; Modell-Anzeige im Web-UI dynamisch",
+        "en": "Bugfix: Fixed cell index order in HTML parser (String and L-phase cells are interleaved in same table row); device.model state; dynamic model name in Web-UI"
+      },
+      "0.3.6": {
+        "de": "NEU: Modul-Konfiguration (Wp, Voc, Anzahl pro String) – berechnet Soll-Stringspannung und Nennleistung; String-Analyse-Karte im Web-UI; Bugfix: akt.Zeit Regex robuster",
+        "en": "NEW: Module configuration (Wp, Voc, count per string) – calculates expected string voltage and nominal power; string analysis card in Web-UI; Bugfix: more robust akt.Zeit regex"
+      },
+      "0.3.7": {
+        "de": "NEU: Modell-Dropdown in den Einstellungen (PIKO 3.0–10.1) – ueberschreibt Auto-Erkennung der String-Anzahl; korrekte String-Anzahl laut offiziellem Datenblatt: 5.5=3 Strings, 8.3=2 Strings",
+        "en": "NEW: Model dropdown in settings (PIKO 3.0–10.1) – overrides auto-detection of string count; correct string counts per official datasheet: 5.5=3 strings, 8.3=2 strings"
       }
     },
     "title": "Kostal PIKO",
@@ -89,7 +101,13 @@
     "verbose": false,
     "networkMode": "local",
     "fritzwgInstance": "fritzwireguard.0",
-    "fritzwgConnectedState": ""
+    "fritzwgConnectedState": "",
+    "moduleWp": 0,
+    "moduleVoc": 0,
+    "string1Modules": 0,
+    "string2Modules": 0,
+    "string3Modules": 0,
+    "pikoModel": "auto"
   },
   "objects": [],
   "instanceObjects": [

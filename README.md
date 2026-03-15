@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.4-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.7-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
@@ -26,8 +26,13 @@ Liest Echtzeit- und Historiendaten vom **Kostal PIKO Solarwechselrichter** direk
 
 | Modell | Firmware | Strings | Status |
 |---|---|---|---|
-| PIKO 8.3 | ver 3.62 | 2 | ✅ Getestet |
+| PIKO 3.0 | ver 3.62 | 1 | Unterstützt |
+| PIKO 3.6 | ver 3.62 | 2 | Unterstützt |
+| PIKO 4.2 | ver 3.62 | 2 | Unterstützt |
 | PIKO 5.5 | ver 3.62 | 3 | ✅ Getestet |
+| PIKO 7.0 | ver 3.62 | 2 | Unterstützt |
+| PIKO 8.3 | ver 3.62 | 2 | ✅ Getestet |
+| PIKO 10.1 | ver 3.62 | 3 | Unterstützt |
 
 ---
 
@@ -108,6 +113,10 @@ Im ioBroker Admin unter **Adapter → Kostal PIKO → Instanz konfigurieren**:
 | Sync-Intervall | `15` | Minuten zwischen automatischen Syncs |
 | InfluxDB-Instanz | `influxdb.0` | Name der InfluxDB-Adapter-Instanz |
 | Web-UI Port | `8092` | Port für das eingebaute Dashboard |
+| **PIKO Modell** | `Auto` | Modell explizit setzen (PIKO 3.0–10.1) oder Auto-Erkennung |
+| Modul-Leistung (Wp) | `0` | Optional: Nennleistung eines Moduls für String-Analyse |
+| Leerlaufspannung Voc | `0` | Optional: Leerlaufspannung eines Moduls (STC) |
+| Anzahl Module pro String | `0` | Optional: Anzahl Module in String 1/2/3 |
 | Verbose Logging | `false` | Debug-Ausgaben aktivieren |
 | **Netzwerk-Modus** | `Lokal` | `Lokal` = direkter Zugriff · `Via iobroker.fritzwireguard` = Zugriff über WireGuard-Tunnel |
 | fritzwireguard-Instanz | `fritzwireguard.0` | Name der fritzwireguard Adapter-Instanz (nur im Tunnel-Modus relevant) |
@@ -193,6 +202,22 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ---
 
 ## Changelog
+
+### 0.3.7 (2026-03-15)
+- **NEU:** Modell-Dropdown in den Einstellungen – PIKO 3.0 bis 10.1 wählbar, überschreibt Auto-Erkennung
+- Korrekte String-Anzahl laut Datenblatt: PIKO 5.5 / 10.1 = 3 Strings, alle anderen = 2 Strings
+
+### 0.3.6 (2026-03-15)
+- **NEU:** Modul-Konfiguration in den Einstellungen (Wp, Voc, Anzahl pro String)
+- **NEU:** Berechnete Soll-Spannung und Nennleistung als ioBroker-States
+- **NEU:** String-Analyse-Karte im Web-UI (Soll vs. Ist mit Farb-Indikator)
+- **Bugfix:** `akt. Zeit` Regex robuster (Tab-Separierung)
+
+### 0.3.5 (2026-03-15)
+- **Bugfix:** Zellenreihenfolge im HTML-Parser war falsch – String und L-Phase stehen in der GLEICHEN Tabellenzeile (interleaved), nicht sequentiell. Alle Messwerte waren dadurch vertauscht
+- **Bugfix:** `pv.string1.current` zeigte L1-Spannung, `pv.string2.voltage` zeigte String1-Strom usw.
+- **NEU:** `device.model` State – liest Modellbezeichnung (PIKO 8.3 / PIKO 5.5) direkt aus dem HTML
+- **NEU:** Modell-Anzeige im Web-UI jetzt dynamisch (nicht mehr hardcoded PIKO 8.3)
 
 ### 0.3.4 (2026-03-14)
 - **NEU:** Netzwerk-Modus Einstellung: `Lokal` (direkter Zugriff) oder `Via iobroker.fritzwireguard` (WireGuard-Tunnel)

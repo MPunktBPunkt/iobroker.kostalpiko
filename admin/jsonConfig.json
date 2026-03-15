@@ -7,6 +7,47 @@
       "text": "Wechselrichter-Verbindung",
       "size": 4
     },
+    "pikoModel": {
+      "type": "select",
+      "label": "PIKO Modell",
+      "help": "Modell des Wechselrichters – bestimmt die Anzahl der PV-Strings",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto-Erkennung (aus HTML)"
+        },
+        {
+          "value": "piko3.0",
+          "label": "PIKO 3.0 (1 String)"
+        },
+        {
+          "value": "piko3.6",
+          "label": "PIKO 3.6 (2 Strings)"
+        },
+        {
+          "value": "piko4.2",
+          "label": "PIKO 4.2 (2 Strings)"
+        },
+        {
+          "value": "piko5.5",
+          "label": "PIKO 5.5 (3 Strings)"
+        },
+        {
+          "value": "piko7.0",
+          "label": "PIKO 7.0 (2 Strings)"
+        },
+        {
+          "value": "piko8.3",
+          "label": "PIKO 8.3 (2 Strings)"
+        },
+        {
+          "value": "piko10.1",
+          "label": "PIKO 10.1 (3 Strings)"
+        }
+      ],
+      "default": "auto",
+      "sm": 5
+    },
     "_h_network": {
       "type": "header",
       "text": "Netzwerk-Zugang",
@@ -146,6 +187,60 @@
       "type": "header",
       "text": "Logging",
       "size": 4
+    },
+    "_h_modules": {
+      "type": "header",
+      "text": "PV-Modul Konfiguration (optional, für String-Analyse)",
+      "size": 4
+    },
+    "_info_modules": {
+      "type": "staticText",
+      "text": "Optionale Angaben zur Berechnung der Soll-Stringspannung. Leer lassen um die Funktion zu deaktivieren."
+    },
+    "moduleWp": {
+      "type": "number",
+      "label": "Modul-Leistung (Wp)",
+      "help": "Nennleistung eines Moduls, z. B. 225",
+      "default": 0,
+      "min": 0,
+      "max": 1000,
+      "sm": 3
+    },
+    "moduleVoc": {
+      "type": "number",
+      "label": "Leerlaufspannung Voc (V)",
+      "help": "Leerlaufspannung eines Moduls bei STC, z. B. 36.8",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "sm": 3
+    },
+    "string1Modules": {
+      "type": "number",
+      "label": "String 1: Anzahl Module",
+      "help": "Anzahl Module in String 1",
+      "default": 0,
+      "min": 0,
+      "max": 50,
+      "sm": 3
+    },
+    "string2Modules": {
+      "type": "number",
+      "label": "String 2: Anzahl Module",
+      "help": "Anzahl Module in String 2",
+      "default": 0,
+      "min": 0,
+      "max": 50,
+      "sm": 3
+    },
+    "string3Modules": {
+      "type": "number",
+      "label": "String 3: Anzahl Module (nur PIKO 5.5)",
+      "help": "Anzahl Module in String 3 (nur bei PIKO 5.5)",
+      "default": 0,
+      "min": 0,
+      "max": 50,
+      "sm": 3
     },
     "verbose": {
       "type": "checkbox",
