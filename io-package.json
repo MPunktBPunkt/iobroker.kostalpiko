@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.13",
+    "version": "0.3.14",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -66,6 +66,10 @@
       "0.3.13": {
         "de": "Bugfix: History-Sync startet 3s nach Live-Poll (PIKO kann nur eine HTTP-Verbindung gleichzeitig); Auto-Retry nach 30s wenn PIKO \"service busy\" meldet; service-busy als WARN statt ERROR",
         "en": "Bugfix: History-Sync starts 3s after live poll (PIKO handles only one HTTP connection at a time); auto-retry after 30s when PIKO reports service busy; service-busy logged as WARN not ERROR"
+      },
+      "0.3.14": {
+        "de": "NEU: Historie-Navigation mit Tag/Woche/Monat-Ansicht und Pfeil-Buttons; groesserer AC-Leistungs-Chart; Frequenz-Chart; Tabelle zeigt gefilterten Zeitraum",
+        "en": "NEW: History navigation with day/week/month view and arrow buttons; larger AC power chart; frequency chart; table shows filtered time range"
       }
     },
     "title": "Kostal PIKO",

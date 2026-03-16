@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.13
+ * Version: 0.3.14
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.13';
+const ADAPTER_VERSION = '0.3.14';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -894,6 +894,13 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .hc{background:var(--bg3);border:1px solid var(--bd);border-radius:var(--r);padding:10px;margin-bottom:12px}
 .hct{font-size:11px;color:var(--mut);margin-bottom:6px}
 .sp{width:100%;height:56px;display:block}
+.sp-big{width:100%;height:110px;display:block}
+.nav-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+.nav-btn{background:var(--bg3);border:1px solid var(--bd);color:var(--txt);padding:5px 12px;border-radius:var(--r);font-size:14px;cursor:pointer;font-family:var(--f)}
+.nav-btn:hover{background:var(--bd)}
+.nav-btn.active{background:var(--acc);color:#000;border-color:var(--acc);font-weight:700}
+.nav-seg{display:flex;gap:3px}
+.nav-date{font-size:13px;font-weight:600;color:var(--txt);min-width:150px;text-align:center}
 .ir{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px}
 .ii .il{font-size:10px;color:var(--mut)}.ii .iv{font-weight:600;font-size:13px}
 </style>
@@ -1003,11 +1010,29 @@ tr:hover td{background:rgba(255,255,255,.02)}
     </div>
   </div>
 
+  <!-- Navigationsleiste -->
+  <div class="card" style="padding:10px 14px;margin-bottom:10px">
+    <div class="nav-bar">
+      <button class="nav-btn" onclick="navShift(-1)" title="Vorheriger Zeitraum">&#8592;</button>
+      <span class="nav-date" id="nav-label">--</span>
+      <button class="nav-btn" onclick="navShift(1)" title="N\u00e4chster Zeitraum" id="nav-next">&#8594;</button>
+      <div class="nav-seg">
+        <button class="nav-btn" id="nb-day"   onclick="navMode('day')">Tag</button>
+        <button class="nav-btn" id="nb-week"  onclick="navMode('week')">Woche</button>
+        <button class="nav-btn" id="nb-month" onclick="navMode('month')">Monat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div style="margin-bottom:10px">
+    <div class="hc"><div class="hct" id="sp0-title">AC Gesamtleistung [W]</div><canvas class="sp-big" id="sp0"></canvas></div>
+  </div>
   <div class="grid g2" style="margin-bottom:12px">
-    <div class="hc"><div class="hct">AC Gesamtleistung [W]</div><canvas class="sp" id="sp0"></canvas></div>
     <div class="hc"><div class="hct">String 1 Leistung [W]</div><canvas class="sp" id="sp1"></canvas></div>
     <div class="hc"><div class="hct">String 2 Leistung [W]</div><canvas class="sp" id="sp2"></canvas></div>
     <div class="hc"><div class="hct">L1 Spannung [V]</div><canvas class="sp" id="sp3"></canvas></div>
+    <div class="hc"><div class="hct">AC Frequenz [Hz]</div><canvas class="sp" id="sp4"></canvas></div>
   </div>
 
   <div class="card">
