@@ -103,6 +103,15 @@
       "max": 65535,
       "sm": 3
     },
+    "_btnTest": {
+      "type": "sendto",
+      "label": "Verbindung testen",
+      "command": "test",
+      "jsonData": "{\"ip\": \"${data.ip}\", \"port\": ${data.port}, \"user\": \"${data.user}\", \"password\": \"${data.password}\"}",
+      "sm": 4,
+      "variant": "contained",
+      "icon": "wifi"
+    },
     "_h2": {
       "type": "header",
       "text": "Authentifizierung",
@@ -129,9 +138,9 @@
     "pollInterval": {
       "type": "number",
       "label": "Poll-Intervall (Sekunden)",
-      "help": "Wie oft werden die Live-Messwerte vom Wechselrichter abgerufen. Empfohlen: 30",
+      "help": "Wie oft werden die Live-Messwerte vom Wechselrichter abgerufen. Empfohlen: 30 Sekunden",
       "default": 30,
-      "min": 5,
+      "min": 1,
       "max": 3600,
       "sm": 4
     },
@@ -178,7 +187,7 @@
       "label": "Web-UI Port",
       "help": "Port für das eingebaute Dashboard (Tabs: Daten, Historie, Nodes, Logs, System). Standard: 8092",
       "default": 8092,
-      "min": 1024,
+      "min": 1,
       "max": 65535,
       "sm": 4
     },
