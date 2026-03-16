@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.7",
+    "version": "0.3.9",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -42,6 +42,14 @@
       "0.3.7": {
         "de": "NEU: Modell-Dropdown in den Einstellungen (PIKO 3.0–10.1) – ueberschreibt Auto-Erkennung der String-Anzahl; korrekte String-Anzahl laut offiziellem Datenblatt: 5.5=3 Strings, 8.3=2 Strings",
         "en": "NEW: Model dropdown in settings (PIKO 3.0–10.1) – overrides auto-detection of string count; correct string counts per official datasheet: 5.5=3 strings, 8.3=2 strings"
+      },
+      "0.3.8": {
+        "de": "Bugfix: Speichern-Button im Admin war rot (required-Flag auf IP-Feld + fehlende sm-Angaben auf staticText-Elementen in jsonConfig)",
+        "en": "Bugfix: Save button in Admin was red (required flag on IP field + missing sm attributes on staticText elements in jsonConfig)"
+      },
+      "0.3.9": {
+        "de": "Bugfix: Passwortfeld verschwindet beim Antippen – encryptedNative gesetzt, kein Plaintext-Default mehr",
+        "en": "Bugfix: Password field disappears on tap – added encryptedNative, removed plaintext default"
       }
     },
     "title": "Kostal PIKO",
@@ -145,5 +153,8 @@
       },
       "native": {}
     }
+  ],
+  "encryptedNative": [
+    "password"
   ]
 }

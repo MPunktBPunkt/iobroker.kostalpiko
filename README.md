@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.7-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.8-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
@@ -202,6 +202,10 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ---
 
 ## Changelog
+
+### 0.3.8 (2026-03-15)
+- **Bugfix:** Speichern-Button in den Adapter-Einstellungen war rot/deaktiviert
+- Ursache: `required: true` auf dem IP-Feld + fehlende `sm`-Angaben in `jsonConfig.json`
 
 ### 0.3.7 (2026-03-15)
 - **NEU:** Modell-Dropdown in den Einstellungen – PIKO 3.0 bis 10.1 wählbar, überschreibt Auto-Erkennung
