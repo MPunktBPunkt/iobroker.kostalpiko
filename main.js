@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.9
+ * Version: 0.3.10
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.9';
+const ADAPTER_VERSION = '0.3.10';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -144,6 +144,53 @@ class KostalPikoAdapter extends utils.Adapter {
         if (state && !state.ack && this._cfg.verbose) {
             this._log('DEBUG', `State geändert: ${id} = ${state.val}`);
         }
+    }
+
+    // ─── Admin-Nachrichten (Verbindungstest) ────────────────────────────────────
+
+    _onMessage(obj) {
+        if (!obj || obj.command !== 'test') return;
+        const { ip, port, user, password } = obj.message || {};
+        const testIp   = (ip   || this._cfg.ip).trim();
+        const testPort = parseInt(port) || this._cfg.port;
+        const testUser = (user || this._cfg.user).trim();
+        const testPass = (password || this._cfg.password).trim();
+
+        const http = require('http');
+        const auth = Buffer.from(`${testUser}:${testPass}`).toString('base64');
+        const req  = http.request({
+            hostname: testIp, port: testPort,
+            path: '/index.fhtml', method: 'GET',
+            headers: { 'Authorization': `Basic ${auth}` },
+            timeout: 5000,
+        }, (res) => {
+            let data = '';
+            res.setEncoding('latin1');
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => {
+                const ok = res.statusCode === 200 && data.includes('PIKO');
+                this.sendTo(obj.from, obj.command, {
+                    result: ok
+                        ? `✅ Verbindung OK – PIKO gefunden (HTTP ${res.statusCode})`
+                        : `⚠️ HTTP ${res.statusCode} – PIKO nicht erkannt`,
+                    error: ok ? null : 'Gerät antwortet aber kein PIKO erkannt',
+                }, obj.callback);
+            });
+        });
+        req.on('error', (e) => {
+            this.sendTo(obj.from, obj.command, {
+                result: null,
+                error: `❌ Verbindung fehlgeschlagen: ${e.message}`,
+            }, obj.callback);
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            this.sendTo(obj.from, obj.command, {
+                result: null,
+                error: '❌ Timeout – Gerät nicht erreichbar (5s)',
+            }, obj.callback);
+        });
+        req.end();
     }
 
     _onUnload(callback) {

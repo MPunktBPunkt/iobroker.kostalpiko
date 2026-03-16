@@ -4,9 +4,22 @@ Dieser Adapter ist **nicht im offiziellen ioBroker-Repository** enthalten und mu
 
 ---
 
-## Methode A – Admin UI mit GitHub-URL (empfohlen)
+## Methode A – Kommandozeile (empfohlen)
 
-Kein Terminal erforderlich, funktioniert direkt im Browser.
+```bash
+iobroker url https://github.com/MPunktBPunkt/iobroker.kostalpiko
+iobroker add kostalpiko
+```
+
+Im ioBroker-Log sollte danach erscheinen:
+```
+[SYSTEM] Kostal PIKO Adapter v0.3.9 gestartet
+[SYSTEM] Web-UI: http://0.0.0.0:8092/
+```
+
+---
+
+## Methode B – Admin UI mit GitHub-URL
 
 1. ioBroker Admin öffnen → **Adapter**-Tab
 2. Oben rechts auf das 🐙 **Octocat-Icon** klicken
@@ -17,31 +30,6 @@ Kein Terminal erforderlich, funktioniert direkt im Browser.
    ```
 5. **„Installieren"** klicken und warten (~30 Sekunden)
 6. Instanz anlegen → konfigurieren → starten
-
-> ⚠️ Die URL muss `/tarball/main/` am Ende haben. Die normale Repo-URL funktioniert nicht.
-
----
-
-## Methode B – Kommandozeile
-
-> ⚠️ **Bekanntes Problem bei der Erstinstallation:**  
-> ioBroker sperrt `npm`-Aufrufe als `root`-User mit der Fehlermeldung:
-> ```
-> Sorry, user root is not allowed to execute '...npm install...' as iobroker
-> ```
-> **Lösung:** Den Befehl als `iobroker`-User ausführen:
-
-```bash
-sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
-iobroker add kostalpiko
-iobroker start kostalpiko.0
-```
-
-Im ioBroker-Log sollte danach erscheinen:
-```
-[SYSTEM] Kostal PIKO Adapter v0.3.7 gestartet
-[SYSTEM] Web-UI: http://0.0.0.0:8092/
-```
 
 ---
 
@@ -65,15 +53,11 @@ iobroker start kostalpiko.0
 ### Kommandozeile (empfohlen)
 
 ```bash
-sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
-iobroker restart kostalpiko.0
+iobroker url https://github.com/MPunktBPunkt/iobroker.kostalpiko
+iobroker restart kostalpiko
 ```
 
-Bei mehreren Instanzen alle neu starten:
-```bash
-iobroker restart kostalpiko.0
-iobroker restart kostalpiko.1
-```
+`iobroker restart kostalpiko` startet alle Instanzen (kostalpiko.0, kostalpiko.1 …) automatisch neu.
 
 ### Admin UI
 

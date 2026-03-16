@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.9",
+    "version": "0.3.10",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -50,6 +50,10 @@
       "0.3.9": {
         "de": "Bugfix: Passwortfeld verschwindet beim Antippen – encryptedNative gesetzt, kein Plaintext-Default mehr",
         "en": "Bugfix: Password field disappears on tap – added encryptedNative, removed plaintext default"
+      },
+      "0.3.10": {
+        "de": "Bugfix: Speichern-Button rot beim Eintippen des Ports (min-Werte angepasst); NEU: Verbindungstest-Button in den Einstellungen",
+        "en": "Bugfix: Save button red while typing port (adjusted min values); NEW: Connection test button in settings"
       }
     },
     "title": "Kostal PIKO",
@@ -94,7 +98,14 @@
     ],
     "nodeProcessParams": [],
     "stopBeforeUpdate": true,
-    "allowInit": true
+    "allowInit": true,
+    "supportCustoms": false,
+    "messages": [
+      {
+        "command": "test",
+        "jsonData": true
+      }
+    ]
   },
   "native": {
     "ip": "192.168.178.30",

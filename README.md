@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.8-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.9-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
@@ -38,7 +38,14 @@ Liest Echtzeit- und Historiendaten vom **Kostal PIKO Solarwechselrichter** direk
 
 ## Installation
 
-### Option A – ioBroker Admin UI (empfohlen, kein Terminal nötig)
+### Option A – Kommandozeile (empfohlen)
+
+```bash
+iobroker url https://github.com/MPunktBPunkt/iobroker.kostalpiko
+iobroker add kostalpiko
+```
+
+### Option B – ioBroker Admin UI
 
 Im ioBroker Admin unter **Adapter** auf das 🐙 **Octocat-Icon** klicken → Tab **„ANY"** → folgende URL eintragen:
 
@@ -47,19 +54,6 @@ https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/
 ```
 
 → „Installieren" klicken. Danach im Admin unter **Instanzen** eine neue Instanz anlegen und konfigurieren.
-
-### Option B – Kommandozeile
-
-> ⚠️ **Wichtig:** Den Befehl **nicht** als `root` ausführen, sondern als `iobroker`-User:
-
-```bash
-sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
-iobroker add kostalpiko
-```
-
-> Hintergrund: ioBroker sperrt `npm`-Aufrufe als `root` aus Sicherheitsgründen mit der Meldung  
-> `Sorry, user root is not allowed to execute ... npm install ... as iobroker`.  
-> Der `sudo -u iobroker` Prefix umgeht das sauber.
 
 ### Option C – manuell (offline)
 
@@ -77,11 +71,11 @@ iobroker add kostalpiko
 ## Update
 
 ```bash
-sudo -u iobroker -H bash -c "cd /opt/iobroker && npm install https://github.com/MPunktBPunkt/iobroker.kostalpiko/tarball/main/"
-iobroker restart kostalpiko.0
+iobroker url https://github.com/MPunktBPunkt/iobroker.kostalpiko
+iobroker restart kostalpiko
 ```
 
-Oder alternativ über die Admin UI: Octocat-Icon → Tab „ANY" → gleiche URL → Installieren → Instanz neu starten.
+Bei mehreren Instanzen startet `iobroker restart kostalpiko` alle automatisch neu.
 
 ---
 
@@ -202,6 +196,11 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ---
 
 ## Changelog
+
+### 0.3.9 (2026-03-15)
+- **Bugfix:** Passwortfeld verschwand beim Antippen in den Instanzeinstellungen
+- `encryptedNative: ["password"]` in `io-package.json` ergänzt, Plaintext-Default entfernt
+- Nach dem Update Passwort bitte einmal neu eingeben und speichern
 
 ### 0.3.8 (2026-03-15)
 - **Bugfix:** Speichern-Button in den Adapter-Einstellungen war rot/deaktiviert
