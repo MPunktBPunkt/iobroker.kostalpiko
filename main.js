@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.14
+ * Version: 0.3.16
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.14';
+const ADAPTER_VERSION = '0.3.16';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -93,9 +93,11 @@ class KostalPikoAdapter extends utils.Adapter {
             webPort              : parseInt(this.config.webPort)               || 8092,
             verbose              : !!this.config.verbose,
             historyFetch         : !!this.config.historyFetch,
+            influxSync           : !!this.config.influxSync,   // InfluxDB-Sync separat
             syncInterval         : parseInt(this.config.syncInterval || this.config.historyInterval) || 15,
             influxInstance       : (this.config.influxInstance       || 'influxdb.0').trim(),
-            influxEnable         : !!this.config.historyFetch,
+            // influxEnable = nur wenn BEIDE aktiviert sind
+            influxEnable         : !!this.config.historyFetch && !!this.config.influxSync,
             // Netzwerk-Modus: 'local' = direkt, 'fritzwireguard' = via WireGuard-Tunnel
             networkMode          : (this.config.networkMode          || 'local').trim(),
             fritzwgInstance      : (this.config.fritzwgInstance      || 'fritzwireguard.0').trim(),
@@ -120,7 +122,7 @@ class KostalPikoAdapter extends utils.Adapter {
             `Ziel: http://${this._cfg.ip}:${this._cfg.port} | ` +
             `Netzwerk: ${networkInfo} | ` +
             `Poll: ${this._cfg.pollInterval}s | ` +
-            `Sync: ${this._cfg.historyFetch ? 'alle ' + this._cfg.syncInterval + ' min → ' + this._cfg.influxInstance : 'deaktiviert'}`
+            `Sync: ${this._cfg.historyFetch ? 'alle ' + this._cfg.syncInterval + ' min' + (this._cfg.influxEnable ? ' → ' + this._cfg.influxInstance : ' (nur Web-UI, kein InfluxDB)') : 'deaktiviert'}`
         );
 
         await this._ensureBaseStates();
@@ -771,7 +773,8 @@ class KostalPikoAdapter extends utils.Adapter {
                 return this._json(res, { data:this._lastData, nodes:this._nodes, ts:new Date().toISOString() });
             }
             if (p === '/api/history') {
-                const rows = [...this._lastHistoryRows].reverse().slice(0, 200);
+                // Alle Zeilen senden – Filterung/Limitierung passiert im Browser
+                const rows = [...this._lastHistoryRows].reverse();
                 return this._json(res, {
                     rows,
                     pikoEpoch   : this._pikoEpoch ? new Date(this._pikoEpoch * 1000).toISOString() : null,
@@ -1036,7 +1039,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
   </div>
 
   <div class="card">
-    <div class="ct"><span class="dot"></span>Messwerte (neueste zuerst, max. 200 Zeilen)</div>
+    <div class="ct"><span class="dot"></span>Messwerte des gew&auml;hlten Zeitraums (neueste zuerst)</div>
     <div style="overflow-x:auto">
     <table>
       <thead><tr>
