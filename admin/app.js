@@ -46,71 +46,146 @@ window.loadData=function(){
 };
 
 /* \u2500\u2500 History \u2500\u2500 */
+// ─── History Navigation ─────────────────────────────────────────────────────
+var navViewMode='day';
+var navOffset=0;
+
+function navGetRange(){
+  var now=new Date(); now.setHours(0,0,0,0);
+  var from=new Date(now), to=new Date(now);
+  if(navViewMode==='day'){
+    from.setDate(from.getDate()+navOffset);
+    to=new Date(from); to.setDate(to.getDate()+1);
+  } else if(navViewMode==='week'){
+    var dow=now.getDay(); var mon=dow===0?6:dow-1;
+    from.setDate(now.getDate()-mon+navOffset*7);
+    to=new Date(from); to.setDate(to.getDate()+7);
+  } else {
+    from.setDate(1); from.setMonth(from.getMonth()+navOffset);
+    to=new Date(from); to.setMonth(to.getMonth()+1);
+  }
+  return {from:from,to:to};
+}
+
+function navLabel(range){
+  var f=range.from, t=new Date(range.to); t.setDate(t.getDate()-1);
+  var opt={day:'2-digit',month:'2-digit',year:'numeric'};
+  if(navViewMode==='day') return f.toLocaleDateString('de-DE',opt);
+  if(navViewMode==='week') return f.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' – '+t.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  return f.toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+}
+
+function navFilter(rows){
+  var r=navGetRange();
+  var fromMs=r.from.getTime(), toMs=r.to.getTime();
+  return rows.filter(function(row){
+    var ts=row.date?new Date(row.date).getTime():0;
+    return ts>=fromMs && ts<toMs;
+  });
+}
+
+window.navMode=function(m){
+  navViewMode=m; navOffset=0;
+  ['day','week','month'].forEach(function(k){
+    var b=document.getElementById('nb-'+k);
+    if(b) b.className='nav-btn'+(m===k?' active':'');
+  });
+  renderNavView();
+};
+
+window.navShift=function(d){
+  navOffset+=d;
+  if(navOffset>0) navOffset=0;
+  renderNavView();
+};
+
+function drawChart(canvasId,vals,color,height){
+  var cv=document.getElementById(canvasId); if(!cv) return;
+  var H=height||56;
+  var W=cv.parentElement.clientWidth-20;
+  cv.width=W; cv.height=H;
+  var ctx=cv.getContext('2d'), L=vals.length;
+  ctx.clearRect(0,0,W,H);
+  if(L<2){
+    ctx.fillStyle='#8b949e'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Keine Daten',W/2,H/2+4); return;
+  }
+  var max=Math.max.apply(null,vals)||1;
+  var pos=vals.filter(function(v){return v>0;});
+  var min=pos.length?Math.min.apply(null,pos):0;
+  ctx.beginPath();
+  vals.forEach(function(v,i){
+    var x=i/(L-1)*W, y=H-((v-min)/(max-min||1))*(H-8)-4;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
+  ctx.fillStyle=color+'25'; ctx.fill();
+  ctx.beginPath();
+  vals.forEach(function(v,i){
+    var x=i/(L-1)*W, y=H-((v-min)/(max-min||1))*(H-8)-4;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.stroke();
+  var maxIdx=vals.indexOf(max);
+  var mx=maxIdx/(L-1)*W, my=H-((max-min)/(max-min||1))*(H-8)-4-10;
+  ctx.fillStyle=color; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(max,mx,my<12?12:my);
+}
+
+function renderNavView(){
+  var range=navGetRange();
+  var lbl=document.getElementById('nav-label');
+  if(lbl) lbl.textContent=navLabel(range);
+  var nxt=document.getElementById('nav-next');
+  if(nxt) nxt.disabled=(navOffset>=0);
+  var filtered=navFilter(histRows).slice().reverse();
+  drawChart('sp0',filtered.map(function(r){return r.acTotalPower;}),  '#f6c90e',110);
+  drawChart('sp1',filtered.map(function(r){return r.dc1.power;}),     '#3fb950',56);
+  drawChart('sp2',filtered.map(function(r){return r.dc2.power;}),     '#58a6ff',56);
+  drawChart('sp3',filtered.map(function(r){return r.ac1.voltage;}),   '#e3b341',56);
+  drawChart('sp4',filtered.map(function(r){return r.frequency;}),     '#a371f7',56);
+  var title=document.getElementById('sp0-title');
+  if(title) title.textContent='AC Gesamtleistung [W] – '+navLabel(range);
+  renderHistTable(navFilter(histRows).slice(0,200));
+}
+
 window.loadHistory=function(){
-  fetch(window.location.origin+'/api/history').then(function(r){return r.json()}).then(function(j){
+  fetch(window.location.origin+'/api/history').then(function(r){return r.json();}).then(function(j){
     histRows=j.rows||[];
     document.getElementById('h-cnt').textContent=j.recordCount||0;
     document.getElementById('h-ep').textContent=j.pikoEpoch?j.pikoEpoch.substring(0,10):'--';
     document.getElementById('h-li').textContent=j.lastImported?new Date(j.lastImported).toLocaleString('de-DE'):'noch kein Import';
     if(histRows.length){
       var f=histRows[histRows.length-1],l=histRows[0];
-      document.getElementById('h-rng').textContent=(f.date||'').substring(0,10)+' \u2013 '+(l.date||'').substring(0,10);
+      document.getElementById('h-rng').textContent=(f.date||'').substring(0,10)+' – '+(l.date||'').substring(0,10);
     }
-    renderHistTable(); renderSparklines();
+    navOffset=0; navViewMode='day';
+    ['day','week','month'].forEach(function(k){
+      var b=document.getElementById('nb-'+k);
+      if(b) b.className='nav-btn'+(k==='day'?' active':'');
+    });
+    renderNavView();
   }).catch(function(){});
 };
 
-function renderHistTable(){
+function renderHistTable(rows){
   var tb=document.getElementById('hTb');
-  if(!histRows.length){
-    tb.innerHTML='<tr><td colspan="16" style="color:var(--mut);text-align:center;padding:16px">Keine Daten</td></tr>'; return;
+  var r=rows||histRows.slice(0,200);
+  if(!r.length){
+    tb.innerHTML='<tr><td colspan="16" style="color:var(--mut);text-align:center;padding:16px">Keine Daten für diesen Zeitraum</td></tr>'; return;
   }
-  tb.innerHTML=histRows.slice(0,200).map(function(r){
-    var dt=r.date?new Date(r.date).toLocaleString('de-DE'):'--';
-    var dim=r.acTotalPower===0?'style="color:var(--mut)"':'';
+  tb.innerHTML=r.map(function(row){
+    var dt=row.date?new Date(row.date).toLocaleString('de-DE'):'--';
+    var dim=row.acTotalPower===0?'style="color:var(--mut)"':'';
     return '<tr '+dim+'><td style="font-size:11px;white-space:nowrap">'+dt+'</td>'+
-      '<td style="font-weight:600">'+r.acTotalPower+'</td>'+
-      '<td>'+r.dc1.voltage+'</td><td>'+r.dc1.current.toFixed(3)+'</td><td>'+r.dc1.power+'</td>'+
-      '<td>'+r.dc2.voltage+'</td><td>'+r.dc2.current.toFixed(3)+'</td><td>'+r.dc2.power+'</td>'+
-      '<td>'+r.ac1.voltage+'</td><td>'+r.ac1.power+'</td>'+
-      '<td>'+r.ac2.voltage+'</td><td>'+r.ac2.power+'</td>'+
-      '<td>'+r.ac3.voltage+'</td><td>'+r.ac3.power+'</td>'+
-      '<td>'+r.frequency+'</td><td>'+r.acStatus+'</td></tr>';
+      '<td style="font-weight:600">'+row.acTotalPower+'</td>'+
+      '<td>'+row.dc1.voltage+'</td><td>'+row.dc1.current.toFixed(3)+'</td><td>'+row.dc1.power+'</td>'+
+      '<td>'+row.dc2.voltage+'</td><td>'+row.dc2.current.toFixed(3)+'</td><td>'+row.dc2.power+'</td>'+
+      '<td>'+row.ac1.voltage+'</td><td>'+row.ac1.power+'</td>'+
+      '<td>'+row.ac2.voltage+'</td><td>'+row.ac2.power+'</td>'+
+      '<td>'+row.ac3.voltage+'</td><td>'+row.ac3.power+'</td>'+
+      '<td>'+row.frequency+'</td><td>'+row.acStatus+'</td></tr>';
   }).join('');
-}
-
-function renderSparklines(){
-  var defs=[
-    {id:'sp0',fn:function(r){return r.acTotalPower},color:'#f6c90e'},
-    {id:'sp1',fn:function(r){return r.dc1.power},   color:'#3fb950'},
-    {id:'sp2',fn:function(r){return r.dc2.power},   color:'#58a6ff'},
-    {id:'sp3',fn:function(r){return r.ac1.voltage}, color:'#e3b341'},
-  ];
-  var sample=[].concat(histRows).reverse().slice(0,96);
-  defs.forEach(function(ds){
-    var cv=document.getElementById(ds.id); if(!cv) return;
-    var vals=sample.map(ds.fn);
-    var max=Math.max.apply(null,vals)||1;
-    var min=Math.min.apply(null,vals.filter(function(v){return v>0}))||0;
-    var W=cv.parentElement.clientWidth-20, H=56;
-    cv.width=W; cv.height=H;
-    var ctx=cv.getContext('2d'), L=vals.length;
-    ctx.clearRect(0,0,W,H);
-    if(L<2) return;
-    ctx.beginPath();
-    vals.forEach(function(v,i){
-      var x=i/(L-1)*W, y=H-((v-min)/(max-min||1))*(H-4)-2;
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    });
-    ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath();
-    ctx.fillStyle=ds.color+'25'; ctx.fill();
-    ctx.beginPath();
-    vals.forEach(function(v,i){
-      var x=i/(L-1)*W, y=H-((v-min)/(max-min||1))*(H-4)-2;
-      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    });
-    ctx.strokeStyle=ds.color; ctx.lineWidth=1.5; ctx.stroke();
-  });
 }
 
 window.triggerSync=function(){
