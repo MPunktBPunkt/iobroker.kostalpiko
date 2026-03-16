@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.12",
+    "version": "0.3.13",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -62,6 +62,10 @@
       "0.3.12": {
         "de": "Bugfix: encryptedNative entfernt (verursachte 401-Fehler durch kaputte Passwort-Dekodierung); default=pvwr wiederhergestellt; Auth-Debug-Log beim Start",
         "en": "Bugfix: removed encryptedNative (caused 401 errors due to broken password decoding); restored default=pvwr; auth debug log on startup"
+      },
+      "0.3.13": {
+        "de": "Bugfix: History-Sync startet 3s nach Live-Poll (PIKO kann nur eine HTTP-Verbindung gleichzeitig); Auto-Retry nach 30s wenn PIKO \"service busy\" meldet; service-busy als WARN statt ERROR",
+        "en": "Bugfix: History-Sync starts 3s after live poll (PIKO handles only one HTTP connection at a time); auto-retry after 30s when PIKO reports service busy; service-busy logged as WARN not ERROR"
       }
     },
     "title": "Kostal PIKO",

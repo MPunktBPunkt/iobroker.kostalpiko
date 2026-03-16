@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.12
+ * Version: 0.3.13
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.12';
+const ADAPTER_VERSION = '0.3.13';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -256,21 +256,24 @@ class KostalPikoAdapter extends utils.Adapter {
         }
 
         // 2. History-Sync (nur alle syncInterval Minuten)
+        // 3s Verzögerung damit PIKO nach dem Live-Poll wieder frei ist
         if (this._cfg.historyFetch) {
             const now        = Date.now();
             const intervalMs = this._cfg.syncInterval * 60 * 1000;
             if (now - this._lastHistoryFetch >= intervalMs) {
                 this._lastHistoryFetch = now;
-                this._fetchAndImportHistory(false).catch(e =>
-                    this._log('ERROR', `History-Sync: ${e.message}`)
-                );
+                setTimeout(() => {
+                    this._fetchAndImportHistory(false).catch(e =>
+                        this._log('WARN', `History-Sync: ${e.message}`)
+                    );
+                }, 3000);
             }
         }
     }
 
     // ─── History: Abruf + Import ─────────────────────────────────────────────────
 
-    async _fetchAndImportHistory(syncAll = false) {
+    async _fetchAndImportHistory(syncAll = false, retryCount = 0) {
         this._log('INFO', syncAll
             ? 'Starte VOLLSYNC (alle Datenpunkte) → InfluxDB...'
             : 'Starte History-Sync (nur neue Datenpunkte)...'
@@ -284,6 +287,15 @@ class KostalPikoAdapter extends utils.Adapter {
         const m = raw.match(/akt\.\s*Zeit[:\s\t]+\s*(\d+)/);
         if (!m) {
             const preview = raw.substring(0, 300).replace(/\r/g, '').split('\n').slice(0,5).join(' | ');
+            const isBusy  = /service.*busy|nicht.*verf.gbar/i.test(raw.substring(0, 200));
+            if (isBusy && retryCount < 2) {
+                // PIKO ist beschäftigt → in 30s nochmal versuchen
+                this._log('WARN', `History-Sync: PIKO meldet "service busy" → Retry in 30s (Versuch ${retryCount + 1}/2)`);
+                setTimeout(() => this._fetchAndImportHistory(syncAll, retryCount + 1).catch(e =>
+                    this._log('WARN', `History-Sync Retry: ${e.message}`)
+                ), 30000);
+                return;
+            }
             throw new Error('"akt. Zeit" nicht im Header gefunden. Header-Preview: ' + preview);
         }
         const aktZeit = parseInt(m[1]);
