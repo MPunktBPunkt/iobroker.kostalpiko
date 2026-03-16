@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.11",
+    "version": "0.3.12",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -58,6 +58,10 @@
       "0.3.11": {
         "de": "Bugfix: Passwortfeld type=text+inputType=password (verschwindet nicht mehr); supportMessages:true fuer Verbindungstest-Button; README Version korrigiert",
         "en": "Bugfix: Password field type=text+inputType=password (no longer disappears); supportMessages:true for connection test button; README version fixed"
+      },
+      "0.3.12": {
+        "de": "Bugfix: encryptedNative entfernt (verursachte 401-Fehler durch kaputte Passwort-Dekodierung); default=pvwr wiederhergestellt; Auth-Debug-Log beim Start",
+        "en": "Bugfix: removed encryptedNative (caused 401 errors due to broken password decoding); restored default=pvwr; auth debug log on startup"
       }
     },
     "title": "Kostal PIKO",
@@ -163,8 +167,5 @@
       },
       "native": {}
     }
-  ],
-  "encryptedNative": [
-    "password"
   ]
 }

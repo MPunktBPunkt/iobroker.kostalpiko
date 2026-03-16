@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.11
+ * Version: 0.3.12
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.11';
+const ADAPTER_VERSION = '0.3.12';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -115,6 +115,7 @@ class KostalPikoAdapter extends utils.Adapter {
         const networkInfo = this._cfg.networkMode === 'fritzwireguard'
             ? `Via ${this._cfg.fritzwgInstance} (WireGuard)`
             : 'Lokal (direkter Zugriff)';
+        this._log('SYSTEM', `Auth: user=${this._cfg.user}, password=${this._cfg.password ? 'gesetzt' : 'LEER!'}`);
         this._log('SYSTEM',
             `Ziel: http://${this._cfg.ip}:${this._cfg.port} | ` +
             `Netzwerk: ${networkInfo} | ` +
