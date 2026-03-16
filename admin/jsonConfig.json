@@ -127,7 +127,8 @@
       "type": "text",
       "inputType": "password",
       "label": "Passwort",
-      "help": "HTTP Basic Auth Passwort (Standard: pvwr). Nach einem Update bitte neu eingeben.",
+      "help": "HTTP Basic Auth Passwort des PIKO-Webservers (Standard: pvwr)",
+      "default": "pvwr",
       "sm": 4
     },
     "_h3": {
