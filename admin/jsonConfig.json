@@ -108,9 +108,8 @@
       "label": "Verbindung testen",
       "command": "test",
       "jsonData": "{\"ip\": \"${data.ip}\", \"port\": ${data.port}, \"user\": \"${data.user}\", \"password\": \"${data.password}\"}",
-      "sm": 4,
-      "variant": "contained",
-      "icon": "wifi"
+      "sm": 12,
+      "variant": "outlined"
     },
     "_h2": {
       "type": "header",
@@ -125,9 +124,10 @@
       "sm": 4
     },
     "password": {
-      "type": "password",
+      "type": "text",
+      "inputType": "password",
       "label": "Passwort",
-      "help": "HTTP Basic Auth Passwort (Standard: pvwr)",
+      "help": "HTTP Basic Auth Passwort (Standard: pvwr). Nach einem Update bitte neu eingeben.",
       "sm": 4
     },
     "_h3": {
