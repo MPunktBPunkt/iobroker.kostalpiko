@@ -92,7 +92,6 @@
       "label": "IP-Adresse des Wechselrichters",
       "help": "z. B. 192.168.178.30",
       "default": "192.168.178.30",
-      "required": true,
       "sm": 6
     },
     "port": {
@@ -119,8 +118,7 @@
     "password": {
       "type": "password",
       "label": "Passwort",
-      "help": "Standard: pvwr",
-      "default": "pvwr",
+      "help": "HTTP Basic Auth Passwort (Standard: pvwr)",
       "sm": 4
     },
     "_h3": {
@@ -144,7 +142,8 @@
     },
     "_info4": {
       "type": "staticText",
-      "text": "Die LogDaten.dat enthält 15-Minuten-Messreihen der letzten ~6 Monate. Der Adapter lädt diese Datei automatisch in dem unten angegebenen Intervall, berechnet die echten Messzeitpunkte und überträgt neue Datenpunkte an InfluxDB. Die InfluxDB-Verbindung (Host, Port, Datenbank, Token) wird im ioBroker-Admin unter 'Adapter → InfluxDB' konfiguriert – nicht hier."
+      "text": "Die LogDaten.dat enthält 15-Minuten-Messreihen der letzten ~6 Monate. Der Adapter lädt diese Datei automatisch in dem unten angegebenen Intervall, berechnet die echten Messzeitpunkte und überträgt neue Datenpunkte an InfluxDB. Die InfluxDB-Verbindung (Host, Port, Datenbank, Token) wird im ioBroker-Admin unter 'Adapter → InfluxDB' konfiguriert – nicht hier.",
+      "sm": 12
     },
     "historyFetch": {
       "type": "checkbox",
@@ -195,7 +194,8 @@
     },
     "_info_modules": {
       "type": "staticText",
-      "text": "Optionale Angaben zur Berechnung der Soll-Stringspannung. Leer lassen um die Funktion zu deaktivieren."
+      "text": "Optionale Angaben zur Berechnung der Soll-Stringspannung. Leer lassen um die Funktion zu deaktivieren.",
+      "sm": 12
     },
     "moduleWp": {
       "type": "number",
