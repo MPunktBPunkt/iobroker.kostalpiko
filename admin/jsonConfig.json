@@ -157,10 +157,18 @@
     },
     "historyFetch": {
       "type": "checkbox",
-      "label": "Historiendaten abrufen & an InfluxDB senden",
-      "help": "Aktiviert den automatischen Abruf der LogDaten.dat und die Synchronisation mit InfluxDB",
+      "label": "Historiendaten laden (LogDaten.dat)",
+      "help": "Lädt die Messdaten der letzten ~6 Monate vom PIKO und zeigt sie im Web-UI an. Kein InfluxDB nötig.",
       "default": false,
       "sm": 12
+    },
+    "influxSync": {
+      "type": "checkbox",
+      "label": "Auch an InfluxDB senden",
+      "help": "Sendet die Historiendaten zusätzlich an InfluxDB für Langzeitauswertungen. Nur sinnvoll wenn InfluxDB-Adapter installiert ist.",
+      "default": false,
+      "sm": 12,
+      "hidden": "!data.historyFetch"
     },
     "syncInterval": {
       "type": "number",

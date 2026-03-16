@@ -146,7 +146,7 @@ function renderNavView(){
   drawChart('sp4',filtered.map(function(r){return r.frequency;}),     '#a371f7',56);
   var title=document.getElementById('sp0-title');
   if(title) title.textContent='AC Gesamtleistung [W] – '+navLabel(range);
-  renderHistTable(navFilter(histRows).slice(0,200));
+  renderHistTable(navFilter(histRows));
 }
 
 window.loadHistory=function(){
@@ -170,7 +170,7 @@ window.loadHistory=function(){
 
 function renderHistTable(rows){
   var tb=document.getElementById('hTb');
-  var r=rows||histRows.slice(0,200);
+  var r=rows||histRows;
   if(!r.length){
     tb.innerHTML='<tr><td colspan="16" style="color:var(--mut);text-align:center;padding:16px">Keine Daten für diesen Zeitraum</td></tr>'; return;
   }
