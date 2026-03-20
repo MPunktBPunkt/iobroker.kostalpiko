@@ -13,7 +13,7 @@ iobroker add kostalpiko
 
 Im ioBroker-Log sollte danach erscheinen:
 ```
-[SYSTEM] Kostal PIKO Adapter v0.3.9 gestartet
+[SYSTEM] Kostal PIKO Adapter v0.3.19 gestartet
 [SYSTEM] Web-UI: http://0.0.0.0:8092/
 ```
 

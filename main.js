@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.3.18
+ * Version: 0.3.19
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -14,7 +14,7 @@ const url   = require('url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME    = 'kostalpiko';
-const ADAPTER_VERSION = '0.3.18';
+const ADAPTER_VERSION = '0.3.19';
 
 const POLL_URLS = {
     main : '/index.fhtml',
@@ -110,7 +110,13 @@ class KostalPikoAdapter extends utils.Adapter {
             // Benachrichtigungen
             notifyEnabled      : !!this.config.notifyEnabled,
             notifyAdapter      : (this.config.notifyAdapter   || 'telegram').trim(),
-            notifyInstance     : (this.config.notifyInstance  || 'telegram.0').trim(),
+            // Instanz je nach gewähltem Adapter
+            notifyInstance     : (() => {
+                const adp = (this.config.notifyAdapter || 'email').trim();
+                if (adp === 'telegram') return (this.config.notifyInstanceTelegram || 'telegram.0').trim();
+                if (adp === 'pushover') return (this.config.notifyInstancePushover || 'pushover.0').trim();
+                return (this.config.notifyInstanceEmail || 'email.0').trim();
+            })(),
             notifyRecipient    : (this.config.notifyRecipient || '').trim(),
             notifyDaily        : !!this.config.notifyDaily,
             notifyDailyTime    : (this.config.notifyDailyTime  || '07:00').trim(),

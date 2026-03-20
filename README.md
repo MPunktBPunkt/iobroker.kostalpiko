@@ -1,6 +1,6 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.18-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![Version](https://img.shields.io/badge/version-0.3.19-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](./LICENSE)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-00457C.svg?logo=paypal)](https://www.paypal.com/donate/?business=martin%40bchmnn.de&currency_code=EUR)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
@@ -197,6 +197,41 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 ---
 
 ## Changelog
+
+### 0.3.19 (2026-03-20)
+- **Bugfix:** Standard-Adapter E-Mail + `email.0`; separate Instanz-Felder pro Adapter-Typ – wechselt automatisch mit
+
+### 0.3.18 (2026-03-20)
+- **Bugfix:** Historie-Tab zeigt Ladeindikator und lädt automatisch neu wenn Daten verfügbar sind
+- Lizenz auf **GPL-3.0** geändert, Spendenbutton ergänzt
+
+### 0.3.17 (2026-03-20)
+- **NEU:** Benachrichtigungen via Telegram / E-Mail / Pushover
+- Tagesbericht mit Unicode-Sparkline-Diagramm, Wochenbericht, Monatsbericht
+- Alarm bei fehlenden Daten oder Ertrag unter Schwellwert
+
+### 0.3.16 (2026-03-16)
+- **Bugfix:** 200-Zeilen-Limit in API entfernt – alle ~6000 Punkte, clientseitige Filterung
+
+### 0.3.15 (2026-03-16)
+- **NEU:** `historyFetch` und `influxSync` getrennt konfigurierbar
+- LogDaten.dat ohne InfluxDB nutzbar
+
+### 0.3.14 (2026-03-16)
+- **NEU:** Historie-Navigation Tag/Woche/Monat mit Pfeil-Buttons; größerer AC-Chart, Frequenz-Chart
+
+### 0.3.13 (2026-03-16)
+- **Bugfix:** History-Sync startet 3s nach Live-Poll; Auto-Retry bei PIKO "service busy"
+
+### 0.3.12 (2026-03-16)
+- **Bugfix:** `encryptedNative` entfernt (verursachte 401-Fehler)
+
+### 0.3.11 (2026-03-16)
+- **Bugfix:** Passwortfeld verschwindet nicht mehr (`type=text` + `inputType=password`)
+
+### 0.3.10 (2026-03-16)
+- **Bugfix:** Speichern-Button bei Port-Eingabe nicht mehr rot (`min=1`)
+- **NEU:** Verbindungstest-Button in den Einstellungen
 
 ### 0.3.9 (2026-03-15)
 - **Bugfix:** Passwortfeld verschwand beim Antippen in den Instanzeinstellungen

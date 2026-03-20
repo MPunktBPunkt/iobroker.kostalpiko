@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.18",
+    "version": "0.3.19",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -86,6 +86,10 @@
       "0.3.18": {
         "de": "Bugfix: Historie geht nach Neustart nicht verloren – Ladeindikator, Auto-Reload nach Sync; loading-Flag in API; Lizenz auf GPL-3.0",
         "en": "Bugfix: History no longer lost after restart – loading indicator, auto-reload after sync; loading flag in API; license changed to GPL-3.0"
+      },
+      "0.3.19": {
+        "de": "Bugfix: Standard-Benachrichtigungsadapter E-Mail/email.0; drei separate Instanz-Felder je Adapter-Typ (kein manuelles Umschreiben mehr noetig)",
+        "en": "Bugfix: default notification adapter changed to email/email.0; three separate instance fields per adapter type (no manual update needed when switching)"
       }
     },
     "title": "Kostal PIKO",
@@ -156,8 +160,7 @@
     "pikoModel": "auto",
     "influxSync": false,
     "notifyEnabled": false,
-    "notifyAdapter": "telegram",
-    "notifyInstance": "telegram.0",
+    "notifyAdapter": "email",
     "notifyRecipient": "",
     "notifyDaily": false,
     "notifyDailyTime": "07:00",
@@ -167,7 +170,10 @@
     "notifyMonthlyTime": "07:00",
     "notifyAlert": false,
     "notifyAlertTime": "07:00",
-    "notifyThresholdKwh": 0
+    "notifyThresholdKwh": 0,
+    "notifyInstanceTelegram": "telegram.0",
+    "notifyInstanceEmail": "email.0",
+    "notifyInstancePushover": "pushover.0"
   },
   "objects": [],
   "instanceObjects": [
