@@ -149,23 +149,39 @@ function renderNavView(){
   renderHistTable(navFilter(histRows));
 }
 
-window.loadHistory=function(){
+var histLoadTimer=null;
+window.loadHistory=function(keepNav){
+  var li=document.getElementById('h-li');
+  if(li) li.textContent='Lade…';
   fetch(window.location.origin+'/api/history').then(function(r){return r.json();}).then(function(j){
+    // Server noch am laden? Dann in 3s nochmal
+    if(j.loading && (!j.rows||j.rows.length===0)){
+      if(li) li.textContent='Lade Historiendaten… (bitte warten)';
+      if(!histLoadTimer) histLoadTimer=setTimeout(function(){histLoadTimer=null;loadHistory(keepNav);},3000);
+      return;
+    }
+    if(histLoadTimer){clearTimeout(histLoadTimer);histLoadTimer=null;}
     histRows=j.rows||[];
-    document.getElementById('h-cnt').textContent=j.recordCount||0;
+    document.getElementById('h-cnt').textContent=j.recordCount||histRows.length;
     document.getElementById('h-ep').textContent=j.pikoEpoch?j.pikoEpoch.substring(0,10):'--';
     document.getElementById('h-li').textContent=j.lastImported?new Date(j.lastImported).toLocaleString('de-DE'):'noch kein Import';
     if(histRows.length){
       var f=histRows[histRows.length-1],l=histRows[0];
       document.getElementById('h-rng').textContent=(f.date||'').substring(0,10)+' – '+(l.date||'').substring(0,10);
+    } else {
+      document.getElementById('h-rng').textContent='Keine Daten';
     }
-    navOffset=0; navViewMode='day';
-    ['day','week','month'].forEach(function(k){
-      var b=document.getElementById('nb-'+k);
-      if(b) b.className='nav-btn'+(k==='day'?' active':'');
-    });
+    if(!keepNav){
+      navOffset=0; navViewMode='day';
+      ['day','week','month'].forEach(function(k){
+        var b=document.getElementById('nb-'+k);
+        if(b) b.className='nav-btn'+(k==='day'?' active':'');
+      });
+    }
     renderNavView();
-  }).catch(function(){});
+  }).catch(function(e){
+    if(li) li.textContent='Fehler beim Laden';
+  });
 };
 
 function renderHistTable(rows){
@@ -190,10 +206,11 @@ function renderHistTable(rows){
 
 window.triggerSync=function(){
   var msg=document.getElementById('syncMsg');
-  if(msg) msg.textContent='Sync wird gestartet...';
+  if(msg) msg.textContent='⏳ Lade Historiendaten vom PIKO…';
   fetch(window.location.origin+'/api/trigger-history').then(function(){
-    if(msg) msg.textContent='Sync l\u00e4uft \u2013 neue Datenpunkte werden \u00fcbertragen. Seite in ca. 10 s neu laden.';
-    setTimeout(loadHistory, 8000);
+    setTimeout(function(){loadHistory(true);},4000);
+    setTimeout(function(){loadHistory(true);},10000);
+    if(msg) setTimeout(function(){msg.textContent='';},12000);
   }).catch(function(e){ if(msg) msg.textContent='Fehler: '+e.message; });
 };
 

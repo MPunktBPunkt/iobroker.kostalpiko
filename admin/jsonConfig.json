@@ -265,6 +265,146 @@
       "label": "Ausführliches Logging (Debug)",
       "default": false,
       "sm": 6
+    },
+    "_h_notify": {
+      "type": "header",
+      "text": "Benachrichtigungen",
+      "size": 4
+    },
+    "notifyEnabled": {
+      "type": "checkbox",
+      "label": "Benachrichtigungen aktivieren",
+      "default": false,
+      "sm": 12
+    },
+    "notifyAdapter": {
+      "type": "select",
+      "label": "Benachrichtigungs-Adapter",
+      "options": [
+        {
+          "value": "telegram",
+          "label": "Telegram"
+        },
+        {
+          "value": "email",
+          "label": "E-Mail"
+        },
+        {
+          "value": "pushover",
+          "label": "Pushover"
+        }
+      ],
+      "default": "telegram",
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyInstance": {
+      "type": "text",
+      "label": "Instanz (z. B. telegram.0)",
+      "default": "telegram.0",
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyRecipient": {
+      "type": "text",
+      "label": "Empfänger (Telegram: Chat-ID, E-Mail: Adresse)",
+      "placeholder": "z. B. 123456789 oder user@example.com",
+      "default": "",
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "_h_notify_daily": {
+      "type": "header",
+      "text": "Tagesbericht",
+      "size": 6,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyDaily": {
+      "type": "checkbox",
+      "label": "Tagesbericht aktivieren",
+      "help": "Täglich ein Bericht mit Leistungskurve des Vortags",
+      "default": false,
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyDailyTime": {
+      "type": "text",
+      "label": "Uhrzeit (HH:MM)",
+      "default": "07:00",
+      "sm": 3,
+      "hidden": "!data.notifyEnabled || !data.notifyDaily"
+    },
+    "_h_notify_weekly": {
+      "type": "header",
+      "text": "Wochenbericht",
+      "size": 6,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyWeekly": {
+      "type": "checkbox",
+      "label": "Wochenbericht aktivieren",
+      "help": "Jeden Montag: Tagesleistungen der Vorwoche",
+      "default": false,
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyWeeklyTime": {
+      "type": "text",
+      "label": "Uhrzeit (HH:MM)",
+      "default": "07:00",
+      "sm": 3,
+      "hidden": "!data.notifyEnabled || !data.notifyWeekly"
+    },
+    "_h_notify_monthly": {
+      "type": "header",
+      "text": "Monatsbericht",
+      "size": 6,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyMonthly": {
+      "type": "checkbox",
+      "label": "Monatsbericht aktivieren",
+      "help": "Am 1. des Monats: alle Tagesleistungen des Vormonats",
+      "default": false,
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyMonthlyTime": {
+      "type": "text",
+      "label": "Uhrzeit (HH:MM)",
+      "default": "07:00",
+      "sm": 3,
+      "hidden": "!data.notifyEnabled || !data.notifyMonthly"
+    },
+    "_h_notify_alert": {
+      "type": "header",
+      "text": "Alarm",
+      "size": 6,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyAlert": {
+      "type": "checkbox",
+      "label": "Alarm aktivieren",
+      "help": "Benachrichtigung wenn Vortag keine Daten oder unter Schwellwert",
+      "default": false,
+      "sm": 4,
+      "hidden": "!data.notifyEnabled"
+    },
+    "notifyAlertTime": {
+      "type": "text",
+      "label": "Uhrzeit (HH:MM)",
+      "default": "07:00",
+      "sm": 3,
+      "hidden": "!data.notifyEnabled || !data.notifyAlert"
+    },
+    "notifyThresholdKwh": {
+      "type": "number",
+      "label": "Schwellwert (kWh, 0=deaktiviert)",
+      "help": "Alarm wenn Tagesertrag unter diesem Wert liegt",
+      "default": 0,
+      "min": 0,
+      "sm": 4,
+      "hidden": "!data.notifyEnabled || !data.notifyAlert"
     }
   }
 }
