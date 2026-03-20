@@ -1,9 +1,9 @@
 {
   "name": "iobroker.kostalpiko",
-  "version": "0.3.16",
+  "version": "0.3.18",
   "description": "ioBroker Adapter für den Kostal PIKO Wechselrichter (HTTP-Scraping)",
   "author": "MPunktBPunkt",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "main": "main.js",
   "keywords": [
     "iobroker",

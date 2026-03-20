@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.3.16",
+    "version": "0.3.18",
     "news": {
       "0.1.0": {
         "en": "Initial release – HTTP scraping of Kostal PIKO inverter",
@@ -78,6 +78,14 @@
       "0.3.16": {
         "de": "Bugfix: 200-Zeilen-Limit entfernt – alle ~6000 Datenpunkte werden geladen und nach Zeitraum gefiltert angezeigt",
         "en": "Bugfix: removed 200-row limit – all ~6000 data points are loaded and displayed filtered by time range"
+      },
+      "0.3.17": {
+        "de": "NEU: Benachrichtigungen via Telegram/E-Mail/Pushover – taeglich (Sparkline-Diagramm), woechentlich (Tagesleistungen), monatlich (Monatsuebersicht), Alarm bei fehlenden Daten oder unter Schwellwert",
+        "en": "NEW: Notifications via Telegram/Email/Pushover – daily (sparkline chart), weekly (daily yields), monthly (month overview), alert for missing data or below threshold"
+      },
+      "0.3.18": {
+        "de": "Bugfix: Historie geht nach Neustart nicht verloren – Ladeindikator, Auto-Reload nach Sync; loading-Flag in API; Lizenz auf GPL-3.0",
+        "en": "Bugfix: History no longer lost after restart – loading indicator, auto-reload after sync; loading flag in API; license changed to GPL-3.0"
       }
     },
     "title": "Kostal PIKO",
@@ -100,7 +108,7 @@
       "photovoltaik",
       "wechselrichter"
     ],
-    "license": "MIT",
+    "license": "GPL-3.0-only",
     "icon": "admin/kostal-piko-icon.svg",
     "type": "general",
     "mode": "daemon",
@@ -146,7 +154,20 @@
     "string2Modules": 0,
     "string3Modules": 0,
     "pikoModel": "auto",
-    "influxSync": false
+    "influxSync": false,
+    "notifyEnabled": false,
+    "notifyAdapter": "telegram",
+    "notifyInstance": "telegram.0",
+    "notifyRecipient": "",
+    "notifyDaily": false,
+    "notifyDailyTime": "07:00",
+    "notifyWeekly": false,
+    "notifyWeeklyTime": "07:00",
+    "notifyMonthly": false,
+    "notifyMonthlyTime": "07:00",
+    "notifyAlert": false,
+    "notifyAlertTime": "07:00",
+    "notifyThresholdKwh": 0
   },
   "objects": [],
   "instanceObjects": [

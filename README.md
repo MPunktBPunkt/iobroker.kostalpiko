@@ -1,7 +1,8 @@
 # ioBroker Kostal PIKO Adapter
 
-[![Version](https://img.shields.io/badge/version-0.3.16-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.18-blue.svg)](https://github.com/MPunktBPunkt/iobroker.kostalpiko)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](./LICENSE)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-00457C.svg?logo=paypal)](https://www.paypal.com/donate/?business=martin%40bchmnn.de&currency_code=EUR)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
 Liest Echtzeit- und Historiendaten vom **Kostal PIKO Solarwechselrichter** direkt über den eingebauten HTTP-Webserver und speichert sie als ioBroker-Datenpunkte. Die 15-Minuten-Messreihen der letzten ~6 Monate werden mit korrektem historischen Zeitstempel an InfluxDB übertragen.
@@ -264,6 +265,14 @@ sudo ufw allow 8093/tcp   # Instanz 1 (PIKO 5.5)
 
 ---
 
+## Spende
+
+[![Donate](https://img.shields.io/badge/Donate-PayPal-00457C.svg?logo=paypal)](https://www.paypal.com/donate/?business=martin%40bchmnn.de&currency_code=EUR)
+
+Wenn dir der Adapter gefällt, freue ich mich über eine kleine Unterstützung!
+
+---
+
 ## Lizenz
 
-MIT © MPunktBPunkt
+GPL-3.0 © MPunktBPunkt
