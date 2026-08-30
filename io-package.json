@@ -1,8 +1,73 @@
 {
   "common": {
     "name": "kostalpiko",
-    "version": "0.6.24",
+    "version": "0.6.29",
     "news": {
+      "0.6.29": {
+        "de": "kWh/kWp nutzt Modul-Vorlage (z. B. SW 225) und String-Anzahl, wenn das kWp-Feld leer ist",
+        "en": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "ru": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "pt": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "nl": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "fr": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "it": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "es": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "pl": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "uk": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty",
+        "zh-cn": "kWh/kWp uses module preset (e.g. SW 225) and string counts when the kWp field is empty"
+      },
+      "0.6.28": {
+        "de": "Ertragstabelle überlebt Adapter-Updates (Speicher in iobroker-data); JSON-Snapshot als State; InfluxDB als Backup/Restore und Grafana-Serie",
+        "en": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "ru": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "pt": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "nl": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "fr": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "it": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "es": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "pl": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "uk": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series",
+        "zh-cn": "Yield table survives adapter updates (store in iobroker-data); JSON snapshot state; InfluxDB backup/restore and Grafana series"
+      },
+      "0.6.27": {
+        "de": "Kein doppelter LogDaten-Download nach Neustart (Speicher-Spike); HTTP-Antwort als Buffer statt String-Concat",
+        "en": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "ru": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "pt": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "nl": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "fr": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "it": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "es": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "pl": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "uk": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat",
+        "zh-cn": "No duplicate LogDaten download after restart (memory spike); HTTP body via buffers instead of string concat"
+      },
+      "0.6.26": {
+        "de": "LogDaten: kurze aktuelle Antworten (Solar-Log) ohne Warnung mergen, Busy/Timeout erneut versuchen; Web-UI-Log in Ortszeit, neueste oben halten, Löschen leert den Buffer; kein Live-Poll während History-Sync",
+        "en": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time, keep newest on top, clear empties the buffer; skip live poll during history sync",
+        "ru": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "pt": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "nl": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "fr": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "it": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "es": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "pl": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "uk": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync",
+        "zh-cn": "LogDaten: merge short current replies (Solar-Log) without warning, retry busy/timeout; web UI log in local time; skip live poll during history sync"
+      },
+      "0.6.25": {
+        "de": "Fix Speicherleck: /api/history cached kompakt statt bei jedem Poll neu serialisiert",
+        "en": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "ru": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "pt": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "nl": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "fr": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "it": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "es": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "pl": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "uk": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll",
+        "zh-cn": "Fix memory leak: /api/history uses compact cached JSON instead of re-serializing on every poll"
+      },
       "0.6.24": {
         "de": "Objekt-Rolle weather.description: weather.state.forecast.0 (E1008)",
         "en": "Object role weather.description: weather.state.forecast.0 (E1008)",

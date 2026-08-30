@@ -1,6 +1,6 @@
 {
   "name": "iobroker.kostalpiko",
-  "version": "0.6.24",
+  "version": "0.6.29",
   "description": "ioBroker adapter for Kostal PIKO solar inverters (HTTP scraping)",
   "author": "MPunktBPunkt",
   "license": "GPL-3.0-only",

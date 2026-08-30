@@ -863,15 +863,26 @@ window.renderNodes=function(){
 window.loadLogs=function(){
   fetch(window.location.origin+'/api/logs').then(function(r){return r.json()}).then(function(j){allLogs=j.logs||[];renderLogs()});
 };
+window.clearLogs=function(){
+  fetch(window.location.origin+'/api/logs/clear',{method:'POST'}).then(function(){
+    allLogs=[];
+    renderLogs();
+  }).catch(function(){
+    allLogs=[];
+    renderLogs();
+  });
+};
 window.renderLogs=function(){
   var f=document.getElementById('lvlF').value, c=document.getElementById('lWrap');
+  var keepScroll=c.scrollTop;
   var rows=f?allLogs.filter(function(l){return l.level===f}):allLogs;
   c.innerHTML=rows.length?rows.map(function(l){
-    return '<div class="le"><span class="lts">'+l.ts.replace('T',' ').substring(0,19)+'</span>'+
+    return '<div class="le"><span class="lts">'+new Date(l.ts).toLocaleString('de-DE')+'</span>'+
       '<span class="llv l'+l.level+'">'+l.level+'</span>'+
       '<span class="lm">'+l.message.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></div>';
   }).join(''):'<div style="color:var(--mut);padding:6px">Keine Eintr\u00e4ge</div>';
-  if(document.getElementById('aScrl').checked) c.scrollTop=c.scrollHeight;
+  // Neueste stehen oben (unshift) – Auto-Scroll hält die Sicht oben, sonst Scrollposition behalten
+  c.scrollTop=document.getElementById('aScrl').checked?0:keepScroll;
 };
 
 /* ── System ── */
@@ -934,15 +945,16 @@ function renderYields(){
   document.getElementById('y-tariff').value=String(s.feedInTariff||0.3925).replace('.',',');
   document.getElementById('y-kwp').value=s.installedKwp>0?String(s.installedKwp).replace('.',','):'';
   document.getElementById('y-plz').value=s.plz||s.plzRegion||'';
-  document.getElementById('y-storage').textContent=yieldsData.storagePath||'iobroker-data/'+window.location.pathname.split('/')[1]+'/monthly-yields.json';
+  document.getElementById('y-storage').textContent=yieldsData.storagePath||'iobroker-data/'+(yieldsData.namespace||'')+'/monthly-yields.json';
   var hr=document.getElementById('y-history-range');
   if(hr){
+    var bits=[];
     if(yieldsData.historyFrom&&yieldsData.historyTo){
-      hr.textContent='History-Cache: '+yieldsData.historyFrom+' – '+yieldsData.historyTo+
-        (yieldsData.backupPath?' · Backup: '+yieldsData.backupPath:'');
-    } else {
-      hr.textContent=yieldsData.backupPath?'Backup: '+yieldsData.backupPath:'';
+      bits.push('History-Cache: '+yieldsData.historyFrom+' – '+yieldsData.historyTo);
     }
+    if(yieldsData.backupPath) bits.push('Backup: '+yieldsData.backupPath);
+    if(yieldsData.influxBackup) bits.push('InfluxDB: '+(yieldsData.influxInstance||'aktiv')+' → yield.monthly');
+    hr.textContent=bits.join(' · ');
   }
 
   var years=yieldsData.years||[];
@@ -1155,9 +1167,14 @@ window.refreshYieldsAuto=function(){
 };
 
 window.restoreYieldsBackup=function(){
-  if(!confirm('monthly-yields.json aus der .bak-Datei wiederherstellen?\n\nAktuelle Tabelle wird überschrieben.')) return;
+  if(!confirm('Backup wiederherstellen (Datei .bak oder ioBroker-Snapshot)?\n\nAktuelle Tabelle wird überschrieben.')) return;
   yieldMsg('Stelle Backup wieder her…');
   postYield({action:'restoreBackup'});
+};
+window.restoreYieldsInflux=function(){
+  if(!confirm('Monatserträge aus InfluxDB laden und mit der Tabelle zusammenführen?\n\nManuelle (blaue) Werte bleiben erhalten. Grafana-Serie: yield.monthly')) return;
+  yieldMsg('Lade aus InfluxDB…');
+  postYield({action:'restoreFromInflux',mode:'merge'});
 };
 
 window.clearYieldsAuto=function(){
@@ -1217,12 +1234,16 @@ function tick(){
   if(!a) return;
   if(a.id==='tab-daten')   loadData();
   if(a.id==='tab-logs')    loadLogs();
-  if(a.id==='tab-history') loadHistory(true);
   if(a.id==='tab-yields')  loadYields();
 }
 initChartTheme();
 loadData(); loadLogs();
 setInterval(tick,15000);
+var histPollMs=60000;
+setInterval(function(){
+  var a=document.querySelector('.tc.act');
+  if(a&&a.id==='tab-history') loadHistory(true);
+},histPollMs);
 window.addEventListener('resize',function(){
   if(document.getElementById('tab-history')&&document.getElementById('tab-history').classList.contains('act')){
     renderNavView();

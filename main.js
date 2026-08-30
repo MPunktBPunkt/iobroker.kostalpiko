@@ -3,7 +3,7 @@
 /**
  * ioBroker Kostal PIKO Adapter
  * Liest Echtzeit- und Historiendaten vom Kostal PIKO Wechselrichter via HTTP-Scraping
- * Version: 0.6.24
+ * Version: 0.6.29
  */
 
 const utils = require('@iobroker/adapter-core');
@@ -16,7 +16,8 @@ const url = require('node:url');
 
 // ─── Konstanten ────────────────────────────────────────────────────────────────
 const ADAPTER_NAME = 'kostalpiko';
-const ADAPTER_VERSION = '0.6.24';
+const ADAPTER_VERSION = '0.6.29';
+const WEATHER_HISTORY_CACHE_MAX = 400;
 
 const POLL_URLS = {
     main: '/index.fhtml',
@@ -360,6 +361,8 @@ class KostalPikoAdapter extends utils.Adapter {
         this._lastWeatherFetch = 0;
         this._weatherGeoCache = null;
         this._weatherHistoryCache = new Map();
+        this._historyApiCache = null;
+        this._historySyncActive = false;
         this._instanceDisplayName = '';
         this._tempLossKwhDay = 0;
         this._tempLossDayDate = '';
@@ -453,9 +456,11 @@ class KostalPikoAdapter extends utils.Adapter {
 
         await this._ensureBaseStates();
         await this._ensureHistoryStates();
+        await this._ensureYieldStates();
         await this._syncModulePresetConfig();
         this._historyCachePath = this._getHistoryCachePath();
         this._yieldsCachePath = this._getYieldsCachePath();
+        await this._migrateLegacyDataFiles();
         await this._loadHistoryCache();
         await this._loadMonthlyYields();
 
@@ -476,13 +481,15 @@ class KostalPikoAdapter extends utils.Adapter {
 
         this._startWebServer();
 
+        // Polls dürfen nicht sofort einen zweiten LogDaten-Download starten
+        if (this._cfg.historyFetch) {
+            this._lastHistoryFetch = Date.now();
+        }
         await this._poll();
         this._pollTimer = this.setInterval(() => this._poll(), this._cfg.pollInterval * 1000);
         this._refreshWeather().catch(e => this._log('DEBUG', `Wetter: ${e.message}`));
 
-        // Nach Neustart sofort Historie vom PIKO nachladen (Cache zeigt bis dahin alte Daten)
         if (this._cfg.historyFetch) {
-            this._lastHistoryFetch = 0;
             this.setTimeout(() => {
                 this._fetchAndImportHistory(false).catch(e => this._log('WARN', `Startup History-Fetch: ${e.message}`));
             }, 5000);
@@ -797,12 +804,17 @@ class KostalPikoAdapter extends utils.Adapter {
             return;
         }
 
-        // 1. Live-Daten
+        // 1. Live-Daten – nicht parallel zum LogDaten-Download (PIKO bedient nur eine HTTP-Verbindung)
+        if (this._historyLoading) {
+            if (this._cfg.verbose) {
+                this._log('DEBUG', 'Live-Poll übersprungen – History-Download läuft');
+            }
+            return;
+        }
         try {
-            const [mainHtml, infoHtml] = await Promise.all([
-                this._fetchPage(POLL_URLS.main),
-                this._fetchPage(POLL_URLS.info),
-            ]);
+            // Sequentiell: zwei parallele Requests erzeugen oft "service busy"
+            const mainHtml = await this._fetchPage(POLL_URLS.main);
+            const infoHtml = await this._fetchPage(POLL_URLS.info);
             await this._writeStates({
                 ...this._parseMainPage(mainHtml),
                 ...this._parseInfoPage(infoHtml),
@@ -821,7 +833,7 @@ class KostalPikoAdapter extends utils.Adapter {
 
         // 2. History-Sync (syncInterval) + Nachhol-Abruf wenn Tagesdaten hängen bleiben
         // 3–5s Verzögerung damit PIKO nach dem Live-Poll wieder frei ist
-        if (this._cfg.historyFetch) {
+        if (this._cfg.historyFetch && !this._historySyncActive) {
             const now = Date.now();
             const intervalMs = this._cfg.syncInterval * 60 * 1000;
             const todayMeta = this._getTodayHistoryMeta();
@@ -1137,7 +1149,7 @@ class KostalPikoAdapter extends utils.Adapter {
             });
             const ar = await this._fetchHttpsJson(`https://archive-api.open-meteo.com/v1/archive?${q}`);
             const w = this._weatherFromArchiveDay(ar, geo, dateKey);
-            this._weatherHistoryCache.set(dateKey, w);
+            this._cacheWeatherHistory(dateKey, w);
             return w;
         } catch (e) {
             this._log('DEBUG', `Wetter-Archiv ${dateKey}: ${e.message}`);
@@ -1406,161 +1418,205 @@ class KostalPikoAdapter extends utils.Adapter {
 
     // ─── History: Abruf + Import ─────────────────────────────────────────────────
 
-    async _fetchAndImportHistory(syncAll = false, retryCount = 0) {
-        this._historyLoading = true;
-        this._log(
-            'INFO',
-            syncAll
-                ? 'Starte VOLLSYNC (alle Datenpunkte) → InfluxDB...'
-                : 'Starte History-Sync (nur neue Datenpunkte)...',
+    _isHistoryBusyBody(raw) {
+        const head = (raw || '').substring(0, 500);
+        return /service.*busy|nicht.*verf.gbar|<html/i.test(head);
+    }
+
+    _retryHistorySync(syncAll, retryCount, reason) {
+        this._log('WARN', `History-Sync: ${reason} → Retry in 30s (Versuch ${retryCount + 1}/3)`);
+        this.setTimeout(
+            () =>
+                this._fetchAndImportHistory(syncAll, retryCount + 1).catch(e => {
+                    this._historySyncActive = false;
+                    this._historyLoading = false;
+                    this._log('WARN', `History-Sync Retry: ${e.message}`);
+                }),
+            30000,
         );
+    }
 
-        // Zeitpunkt des HTTP-Abrufs merken (für Epochen-Berechnung)
-        const fetchUnixSec = Math.floor(Date.now() / 1000);
-        const raw = await this._fetchPage(POLL_URLS.log);
+    async _fetchAndImportHistory(syncAll = false, retryCount = 0) {
+        if (retryCount === 0) {
+            if (this._historySyncActive) {
+                this._log('DEBUG', 'History-Sync läuft bereits – übersprungen');
+                return;
+            }
+            this._historySyncActive = true;
+            this._lastHistoryFetch = Date.now();
+        }
+        this._historyLoading = true;
+        let retainSyncLock = false;
+        try {
+            if (retryCount === 0) {
+                this._log(
+                    'INFO',
+                    syncAll
+                        ? 'Starte VOLLSYNC (alle Datenpunkte) → InfluxDB...'
+                        : 'Starte History-Sync (nur neue Datenpunkte)...',
+                );
+            }
 
-        // "akt. Zeit" aus Header lesen (Tab-separiert: "akt. Zeit:\t 495381409")
-        const m = raw.match(/akt\.\s*Zeit[:\s\t]+\s*(\d+)/);
-        if (!m) {
-            const preview = raw.substring(0, 300).replace(/\r/g, '').split('\n').slice(0, 5).join(' | ');
-            const isBusy = /service.*busy|nicht.*verf.gbar/i.test(raw.substring(0, 200));
-            if (isBusy && retryCount < 3) {
-                // PIKO ist beschäftigt → in 30s nochmal versuchen
-                this._historyLoading = false;
+            // Zeitpunkt des HTTP-Abrufs merken (für Epochen-Berechnung)
+            const fetchUnixSec = Math.floor(Date.now() / 1000);
+            let raw;
+            try {
+                raw = await this._fetchPage(POLL_URLS.log, 60000);
+            } catch (e) {
+                if (retryCount < 3 && /timeout|truncated|ECONNRESET|socket hang up|EPIPE/i.test(e.message || '')) {
+                    retainSyncLock = true;
+                    this._retryHistorySync(syncAll, retryCount, e.message);
+                    return;
+                }
+                throw e;
+            }
+
+            // "akt. Zeit" aus Header lesen (Tab-separiert: "akt. Zeit:\t 495381409")
+            const m = raw.match(/akt\.\s*Zeit[:\s\t]+\s*(\d+)/);
+            if (!m) {
+                const preview = raw.substring(0, 300).replace(/\r/g, '').split('\n').slice(0, 5).join(' | ');
+                if (this._isHistoryBusyBody(raw) && retryCount < 3) {
+                    retainSyncLock = true;
+                    this._retryHistorySync(syncAll, retryCount, 'PIKO meldet "service busy"');
+                    return;
+                }
+                throw new Error(`"akt. Zeit" nicht im Header gefunden. Header-Preview: ${preview}`);
+            }
+            const aktZeit = parseInt(m[1]);
+
+            this._pikoEpoch = fetchUnixSec - aktZeit;
+            this._log(
+                'INFO',
+                `PIKO Epoche: ${new Date(this._pikoEpoch * 1000).toISOString().substring(0, 10)} ` +
+                    `| akt. Zeit des Geräts: ${aktZeit} s`,
+            );
+            await this.setStateAsync('history.pikoEpoch', {
+                val: new Date(this._pikoEpoch * 1000).toISOString(),
+                ack: true,
+            });
+
+            const rows = this._parseLogDaten(raw, this._pikoEpoch);
+
+            if (rows.length === 0) {
+                if (retryCount < 3) {
+                    retainSyncLock = true;
+                    this._retryHistorySync(syncAll, retryCount, 'LogDaten.dat ohne Messzeilen');
+                    return;
+                }
                 this._log(
                     'WARN',
-                    `History-Sync: PIKO meldet "service busy" → Retry in 30s (Versuch ${retryCount + 1}/3)`,
-                );
-                this.setTimeout(
-                    () =>
-                        this._fetchAndImportHistory(syncAll, retryCount + 1).catch(e =>
-                            this._log('WARN', `History-Sync Retry: ${e.message}`),
-                        ),
-                    30000,
+                    'LogDaten.dat: keine verwertbaren Zeilen gefunden – bestehende Historie bleibt erhalten',
                 );
                 return;
             }
-            throw new Error(`"akt. Zeit" nicht im Header gefunden. Header-Preview: ${preview}`);
-        }
-        const aktZeit = parseInt(m[1]);
 
-        // PIKO-Epoche berechnen:
-        // Gerät läuft aktZeit Sekunden → Inbetriebnahme war vor aktZeit Sekunden
-        this._pikoEpoch = fetchUnixSec - aktZeit;
-        this._log(
-            'INFO',
-            `PIKO Epoche: ${new Date(this._pikoEpoch * 1000).toISOString().substring(0, 10)} ` +
-                `| akt. Zeit des Geräts: ${aktZeit} s`,
-        );
-        await this.setStateAsync('history.pikoEpoch', {
-            val: new Date(this._pikoEpoch * 1000).toISOString(),
-            ack: true,
-        });
+            const prevRows = this._lastHistoryRows;
 
-        // CSV parsen
-        const rows = this._parseLogDaten(raw, this._pikoEpoch);
+            if (this._isHistoryParseSuspicious(prevRows, rows)) {
+                if (retryCount < 3) {
+                    retainSyncLock = true;
+                    this._retryHistorySync(
+                        syncAll,
+                        retryCount,
+                        `LogDaten.dat unvollständig (${rows.length} Punkte, zuvor ${prevRows.length})`,
+                    );
+                    return;
+                }
+                this._log(
+                    'WARN',
+                    `LogDaten.dat wirkt unvollständig (${rows.length} Punkte, zuvor ${prevRows.length}, ` +
+                        `${rows[0].date.substring(0, 10)} – ${rows[rows.length - 1].date.substring(0, 10)}) – ` +
+                        `Cache wird per Merge aktualisiert, ältere Punkte bleiben erhalten`,
+                );
+            } else if (this._cfg.verbose && prevRows.length && rows.length < prevRows.length * 0.1) {
+                this._log(
+                    'DEBUG',
+                    `LogDaten.dat kurz (${rows.length} von ${prevRows.length} Punkten), aber aktuell – Merge ohne Warnung`,
+                );
+            }
 
-        if (rows.length === 0) {
-            this._log('WARN', 'LogDaten.dat: keine verwertbaren Zeilen gefunden – bestehende Historie bleibt erhalten');
-            this._historyLoading = false;
-            return;
-        }
+            const merged = this._mergeHistoryRows(prevRows, rows);
+            const added = merged.length - prevRows.length;
+            const removed = prevRows.length + rows.length - merged.length;
+            this._lastHistoryRows = merged.map(r => this._compactHistoryRow(r));
+            this._invalidateHistoryApiCache();
+            if (removed > 0) {
+                this._log('INFO', `${removed} doppelte History-Punkte beim Merge entfernt`);
+            }
+            if (added > 0) {
+                this._log('INFO', `${added} neue Punkte per Merge (gesamt ${merged.length})`);
+            }
 
-        const prevRows = this._lastHistoryRows;
-        const prevMaxTs = prevRows.reduce((m, r) => Math.max(m, r.ts), 0);
-        const newMaxTs = rows.reduce((m, r) => Math.max(m, r.ts), 0);
+            await this._saveHistoryCache().catch(e => this._log('WARN', `History-Cache speichern: ${e.message}`));
+            await this._refreshAutoYields().catch(e => this._log('WARN', `Monatserträge aktualisieren: ${e.message}`));
 
-        if (this._isHistoryParseSuspicious(prevRows, rows)) {
+            const allRows = this._lastHistoryRows;
             this._log(
-                'WARN',
-                `LogDaten.dat wirkt unvollständig (${rows.length} Punkte, zuvor ${prevRows.length}, ` +
-                    `${rows[0].date.substring(0, 10)} – ${rows[rows.length - 1].date.substring(0, 10)}) – ` +
-                    `Cache wird per Merge aktualisiert, ältere Punkte bleiben erhalten`,
+                'INFO',
+                `${allRows.length} Datenpunkte gesamt | ` +
+                    `${allRows[0].date.substring(0, 10)} – ${allRows[allRows.length - 1].date.substring(0, 10)}`,
             );
-        } else if (prevRows.length && newMaxTs < prevMaxTs - 45 * 60 * 1000) {
-            this._log(
-                'WARN',
-                `LogDaten.dat endet früher als Cache (${new Date(newMaxTs).toISOString()} vs. ` +
-                    `${new Date(prevMaxTs).toISOString()}) – Cache wird per Merge beibehalten`,
-            );
-        }
 
-        const merged = this._mergeHistoryRows(prevRows, rows);
-        const added = merged.length - prevRows.length;
-        const removed = prevRows.length + rows.length - merged.length;
-        this._lastHistoryRows = merged;
-        if (removed > 0) {
-            this._log('INFO', `${removed} doppelte History-Punkte beim Merge entfernt`);
-        }
-        if (added > 0) {
-            this._log('INFO', `${added} neue Punkte per Merge (gesamt ${merged.length})`);
-        }
+            if (syncAll) {
+                this._log('INFO', 'Sync-All: Cursor zurückgesetzt, übertrage alle Datenpunkte');
+                this._lastImportedTs = 0;
+            }
 
-        await this._saveHistoryCache().catch(e => this._log('WARN', `History-Cache speichern: ${e.message}`));
-        await this._refreshAutoYields().catch(e => this._log('WARN', `Monatserträge aktualisieren: ${e.message}`));
+            const newRows = syncAll ? allRows.filter(r => r.ts > 0) : allRows.filter(r => r.ts > this._lastImportedTs);
+            this._log('INFO', `${newRows.length} Datenpunkte ${syncAll ? '(alle)' : '(neu)'} → InfluxDB`);
 
-        const allRows = this._lastHistoryRows;
-        this._log(
-            'INFO',
-            `${allRows.length} Datenpunkte gesamt | ` +
-                `${allRows[0].date.substring(0, 10)} – ${allRows[allRows.length - 1].date.substring(0, 10)}`,
-        );
+            if (newRows.length === 0) {
+                this._lastImportIso = new Date().toISOString();
+                await this.setStateAsync('history.lastImport', { val: this._lastImportIso, ack: true });
+                await this.setStateAsync('history.recordCount', { val: allRows.length, ack: true });
+                await this._refreshAutoYields().catch(e =>
+                    this._log('WARN', `Monatserträge aktualisieren: ${e.message}`),
+                );
+                return;
+            }
 
-        // Deduplication: bei syncAll Cursor auf 0 setzen → alles übertragen
-        if (syncAll) {
-            this._log('INFO', 'Sync-All: Cursor zurückgesetzt, übertrage alle Datenpunkte');
-            this._lastImportedTs = 0;
-        }
+            let influxSent = 0;
+            let maxTs = this._lastImportedTs;
 
-        // Nur neue Zeilen importieren (gegen gesamte Historie inkl. Cache)
-        const newRows = syncAll ? allRows.filter(r => r.ts > 0) : allRows.filter(r => r.ts > this._lastImportedTs);
-        this._log('INFO', `${newRows.length} Datenpunkte ${syncAll ? '(alle)' : '(neu)'} → InfluxDB`);
+            for (const row of newRows) {
+                await this._writeHistoryRow(row);
 
-        if (newRows.length === 0) {
+                if (this._cfg.influxEnable) {
+                    const n = await this._sendRowToInflux(row);
+                    influxSent += n;
+                }
+
+                if (row.ts > maxTs) {
+                    maxTs = row.ts;
+                }
+            }
+
+            this._lastImportedTs = maxTs;
+            await this.setStateAsync('history.lastImportedTs', { val: maxTs, ack: true });
             this._lastImportIso = new Date().toISOString();
             await this.setStateAsync('history.lastImport', { val: this._lastImportIso, ack: true });
             await this.setStateAsync('history.recordCount', { val: allRows.length, ack: true });
-            await this._refreshAutoYields().catch(e => this._log('WARN', `Monatserträge aktualisieren: ${e.message}`));
-            this._historyLoading = false;
-            return;
-        }
-
-        let influxSent = 0;
-        let maxTs = this._lastImportedTs;
-
-        for (const row of newRows) {
-            await this._writeHistoryRow(row);
-
+            await this.setStateAsync('history.newRecords', { val: newRows.length, ack: true });
+            await this.setStateAsync('history.oldestRecord', { val: allRows[0].date, ack: true });
+            await this.setStateAsync('history.newestRecord', { val: allRows[allRows.length - 1].date, ack: true });
             if (this._cfg.influxEnable) {
-                const n = await this._sendRowToInflux(row);
-                influxSent += n;
+                await this.setStateAsync('history.influxSent', { val: influxSent, ack: true });
             }
 
-            if (row.ts > maxTs) {
-                maxTs = row.ts;
+            this._log(
+                'INFO',
+                `Sync ${syncAll ? '(Vollsync)' : ''} fertig: ${newRows.length} Punkte${
+                    this._cfg.influxEnable ? `, ${influxSent} → ${this._cfg.influxInstance}` : ''
+                }`,
+            );
+        } finally {
+            if (!retainSyncLock) {
+                this._historyLoading = false;
+                this._historySyncActive = false;
+            } else {
+                this._historyLoading = false;
             }
         }
-
-        // Cursor speichern
-        this._lastImportedTs = maxTs;
-        await this.setStateAsync('history.lastImportedTs', { val: maxTs, ack: true });
-        this._lastImportIso = new Date().toISOString();
-        await this.setStateAsync('history.lastImport', { val: this._lastImportIso, ack: true });
-        await this.setStateAsync('history.recordCount', { val: allRows.length, ack: true });
-        await this.setStateAsync('history.newRecords', { val: newRows.length, ack: true });
-        await this.setStateAsync('history.oldestRecord', { val: allRows[0].date, ack: true });
-        await this.setStateAsync('history.newestRecord', { val: allRows[allRows.length - 1].date, ack: true });
-        if (this._cfg.influxEnable) {
-            await this.setStateAsync('history.influxSent', { val: influxSent, ack: true });
-        }
-
-        this._historyLoading = false;
-        this._log(
-            'INFO',
-            `Sync ${syncAll ? '(Vollsync)' : ''} fertig: ${newRows.length} Punkte${
-                this._cfg.influxEnable ? `, ${influxSent} → ${this._cfg.influxInstance}` : ''
-            }`,
-        );
     }
 
     // ─── History → ioBroker-States (mit historischem ts) ────────────────────────
@@ -1678,22 +1734,9 @@ class KostalPikoAdapter extends utils.Adapter {
         }
         const prevMax = prevRows[prevRows.length - 1].ts;
         const newMax = newRows[newRows.length - 1].ts;
-        // Abgeschnittene Datei: neuester Punkt deutlich älter als im Cache (z. B. fehlender Nachmittag)
-        if (newMax < prevMax - 45 * 60 * 1000) {
-            return true;
-        }
-        if (newRows.length >= prevRows.length * 0.5) {
-            return false;
-        }
-        const prevSpan = prevRows[prevRows.length - 1].ts - prevRows[0].ts;
-        const newSpan = newRows[newRows.length - 1].ts - newRows[0].ts;
-        if (newRows.length < prevRows.length * 0.1) {
-            return true;
-        }
-        if (prevSpan > 7 * 86400000 && newSpan < 2 * 86400000) {
-            return true;
-        }
-        return false;
+        // Nur wenn die Datei älter endet als der Cache: echter Truncate (fehlender Nachmittag).
+        // Eine kurze, aber aktuelle Antwort (1 Punkt vs. 20k, Solar-Log blockiert) ist kein Fehler.
+        return newMax < prevMax - 45 * 60 * 1000;
     }
 
     _resolvePikoModelKey() {
@@ -1763,9 +1806,76 @@ class KostalPikoAdapter extends utils.Adapter {
         return { ok: !w.length, warnings: w };
     }
 
+    _getPersistentDataDir() {
+        let base = '';
+        try {
+            if (typeof utils.getAbsoluteDefaultDataDir === 'function') {
+                base = utils.getAbsoluteDefaultDataDir();
+            }
+        } catch (_) {}
+        if (!base) {
+            base = path.join('/opt/iobroker', 'iobroker-data');
+        }
+        return path.join(base, this.namespace);
+    }
+
+    _legacyDataDirs() {
+        const dirs = [];
+        const add = dir => {
+            if (dir && !dirs.includes(dir)) {
+                dirs.push(dir);
+            }
+        };
+        add(path.join(process.cwd(), 'iobroker-data', this.namespace));
+        if (this.adapterDir) {
+            add(path.join(this.adapterDir, 'iobroker-data', this.namespace));
+        }
+        return dirs;
+    }
+
     _getHistoryCachePath() {
-        const dataRoot = path.join(process.cwd(), 'iobroker-data', this.namespace);
-        return path.join(dataRoot, 'history-cache.json');
+        return path.join(this._getPersistentDataDir(), 'history-cache.json');
+    }
+
+    _getYieldsCachePath() {
+        return path.join(this._getPersistentDataDir(), 'monthly-yields.json');
+    }
+
+    async _migrateLegacyDataFiles() {
+        const destDir = this._getPersistentDataDir();
+        await fs.promises.mkdir(destDir, { recursive: true });
+        const names = [
+            'monthly-yields.json',
+            'monthly-yields.json.bak',
+            'history-cache.json',
+            'history-cache.json.bak',
+        ];
+        for (const dir of this._legacyDataDirs()) {
+            if (path.resolve(dir) === path.resolve(destDir)) {
+                continue;
+            }
+            for (const name of names) {
+                const src = path.join(dir, name);
+                const dest = path.join(destDir, name);
+                try {
+                    await fs.promises.access(src);
+                } catch (_) {
+                    continue;
+                }
+                let overwrite = false;
+                try {
+                    const srcStat = await fs.promises.stat(src);
+                    const destStat = await fs.promises.stat(dest);
+                    overwrite = srcStat.size > destStat.size;
+                } catch (_) {
+                    overwrite = true;
+                }
+                if (overwrite) {
+                    await fs.promises.copyFile(src, dest);
+                    this._log('INFO', `Daten nach Update-sicheren Ordner kopiert: ${name}`);
+                }
+            }
+        }
     }
 
     _compactHistoryRow(row) {
@@ -1784,6 +1894,49 @@ class KostalPikoAdapter extends utils.Adapter {
             acTotalPower: row.acTotalPower,
             totalEnergy: row.totalEnergy,
         };
+    }
+
+    _invalidateHistoryApiCache() {
+        this._historyApiCache = null;
+    }
+
+    _buildHistoryApiPayload() {
+        const newest = this._lastHistoryRows.length
+            ? this._lastHistoryRows[this._lastHistoryRows.length - 1].date
+            : null;
+        const todayMeta = this._getTodayHistoryMeta();
+        return {
+            rows: this._lastHistoryRows.slice().reverse(),
+            pikoEpoch: this._pikoEpoch ? new Date(this._pikoEpoch * 1000).toISOString() : null,
+            recordCount: this._lastHistoryRows.length,
+            lastImported: this._lastImportIso,
+            newestRecord: newest,
+            todayNewest: todayMeta.todayNewest,
+            todayStale: todayMeta.todayStale,
+            todayAgeMin: todayMeta.ageMin,
+            loading: this._historyLoading || false,
+            stringAnalysis: this._getStringAnalysisConfig(),
+            temperatureAnalysis: this._getTemperatureAnalysis(),
+            stringCount: this._getStringCount(),
+            fromCache: this._historyLoading && this._lastHistoryRows.length > 0,
+        };
+    }
+
+    _getHistoryApiJson() {
+        if (!this._historyApiCache) {
+            this._historyApiCache = JSON.stringify(this._buildHistoryApiPayload());
+        }
+        return this._historyApiCache;
+    }
+
+    _cacheWeatherHistory(dateKey, weather) {
+        if (this._weatherHistoryCache.size >= WEATHER_HISTORY_CACHE_MAX) {
+            const oldest = this._weatherHistoryCache.keys().next().value;
+            if (oldest !== undefined) {
+                this._weatherHistoryCache.delete(oldest);
+            }
+        }
+        this._weatherHistoryCache.set(dateKey, weather);
     }
 
     async _saveHistoryCache() {
@@ -1815,7 +1968,8 @@ class KostalPikoAdapter extends utils.Adapter {
                 if (!data.rows || !Array.isArray(data.rows) || data.rows.length < 10) {
                     continue;
                 }
-                this._lastHistoryRows = this._dedupeHistoryRows(data.rows);
+                this._lastHistoryRows = this._dedupeHistoryRows(data.rows.map(r => this._compactHistoryRow(r)));
+                this._invalidateHistoryApiCache();
                 if (data.pikoEpoch) {
                     this._pikoEpoch = data.pikoEpoch;
                 }
@@ -1840,11 +1994,6 @@ class KostalPikoAdapter extends utils.Adapter {
                 }
             }
         }
-    }
-
-    _getYieldsCachePath() {
-        const dataRoot = path.join(process.cwd(), 'iobroker-data', this.namespace);
-        return path.join(dataRoot, 'monthly-yields.json');
     }
 
     _defaultMonthlyYields() {
@@ -1876,34 +2025,68 @@ class KostalPikoAdapter extends utils.Adapter {
     }
 
     async _loadMonthlyYields() {
-        if (!this._yieldsCachePath) {
-            return;
+        const candidates = [];
+        const addFile = async filePath => {
+            const data = await this._readYieldsFile(filePath);
+            if (data) {
+                candidates.push({ data, src: filePath, n: Object.keys(data.months).length });
+            }
+        };
+        if (this._yieldsCachePath) {
+            await addFile(this._yieldsCachePath);
+            await addFile(`${this._yieldsCachePath}.bak`);
         }
-        const loaded = await this._readYieldsFile(this._yieldsCachePath);
-        if (loaded) {
-            this._monthlyYields = loaded;
-            const n = Object.keys(this._monthlyYields.months).length;
-            this._log('INFO', `Monatserträge geladen: ${n} Monate`);
-            if (n < 3) {
-                const bak = await this._readYieldsFile(`${this._yieldsCachePath}.bak`);
-                if (bak && Object.keys(bak.months).length > n) {
-                    this._log(
-                        'WARN',
-                        `Monatserträge wirken unvollständig (${n} Monate) – Backup hat ` +
-                            `${Object.keys(bak.months).length} Monate (Ertrag-Tab: „Backup wiederherstellen“)`,
-                    );
-                }
+        for (const dir of this._legacyDataDirs()) {
+            await addFile(path.join(dir, 'monthly-yields.json'));
+            await addFile(path.join(dir, 'monthly-yields.json.bak'));
+        }
+        const snap = await this._readYieldsSnapshotState();
+        if (snap) {
+            candidates.push({ data: snap, src: 'state:yields.snapshot', n: Object.keys(snap.months).length });
+        }
+
+        candidates.sort((a, b) => b.n - a.n);
+        if (candidates.length && candidates[0].n > 0) {
+            this._monthlyYields = candidates[0].data;
+            this._log('INFO', `Monatserträge geladen: ${candidates[0].n} Monate (${candidates[0].src})`);
+            if (this._yieldsCachePath && candidates[0].src !== this._yieldsCachePath) {
+                await this._saveMonthlyYields();
             }
             return;
         }
-        const bak = await this._readYieldsFile(`${this._yieldsCachePath}.bak`);
-        if (bak && Object.keys(bak.months).length) {
-            this._monthlyYields = bak;
-            this._log('WARN', `Monatserträge aus Backup wiederhergestellt: ${Object.keys(bak.months).length} Monate`);
+
+        const fromInflux = await this._loadYieldsFromInflux();
+        if (fromInflux && Object.keys(fromInflux.months).length) {
+            this._monthlyYields = fromInflux;
+            this._log(
+                'INFO',
+                `Monatserträge aus InfluxDB wiederhergestellt: ${Object.keys(fromInflux.months).length} Monate`,
+            );
             await this._saveMonthlyYields();
             return;
         }
+
         this._monthlyYields = this._defaultMonthlyYields();
+        if (this._cfg.influxEnable) {
+            this.setTimeout(() => {
+                this._loadYieldsFromInflux()
+                    .then(async data => {
+                        if (
+                            !data ||
+                            Object.keys(data.months).length <= Object.keys(this._monthlyYields.months).length
+                        ) {
+                            return;
+                        }
+                        this._monthlyYields = data;
+                        this._log(
+                            'INFO',
+                            `Monatserträge nachträglich aus InfluxDB: ${Object.keys(data.months).length} Monate`,
+                        );
+                        await this._saveMonthlyYields();
+                    })
+                    .catch(e => this._log('DEBUG', `Influx-Ertrag später: ${e.message}`));
+            }, 12000);
+        }
     }
 
     async _readYieldsFile(filePath) {
@@ -1927,8 +2110,18 @@ class KostalPikoAdapter extends utils.Adapter {
         }
     }
 
-    async _saveMonthlyYields() {
+    async _saveMonthlyYields(options = {}) {
         if (!this._yieldsCachePath || !this._monthlyYields) {
+            return;
+        }
+        const n = Object.keys(this._monthlyYields.months || {}).length;
+        const existing = await this._readYieldsFile(this._yieldsCachePath);
+        const existingN = existing ? Object.keys(existing.months).length : 0;
+        if (!options.force && existingN >= 12 && n < existingN * 0.5) {
+            this._log(
+                'WARN',
+                `Monatserträge nicht überschrieben (${n} Monate in Speicher, Datei hat ${existingN}) – Import/Backup nutzen`,
+            );
             return;
         }
         const dir = path.dirname(this._yieldsCachePath);
@@ -1939,6 +2132,178 @@ class KostalPikoAdapter extends utils.Adapter {
         } catch (_) {}
         this._monthlyYields.savedAt = new Date().toISOString();
         await fs.promises.writeFile(this._yieldsCachePath, JSON.stringify(this._monthlyYields, null, 2), 'utf-8');
+        await this._persistYieldsSnapshotState();
+        this._syncYieldsToInflux().catch(e => this._log('WARN', `Ertrag → InfluxDB: ${e.message}`));
+    }
+
+    async _ensureYieldStates() {
+        const defs = [
+            {
+                id: 'yield.monthly',
+                type: 'number',
+                role: 'value.energy',
+                name: 'Monatsertrag (Influx/Grafana)',
+                unit: 'kWh',
+                def: 0,
+            },
+            {
+                id: 'yields.snapshot',
+                type: 'string',
+                role: 'json',
+                name: 'Ertragstabelle JSON-Backup',
+                def: '',
+            },
+        ];
+        for (const d of defs) {
+            await this._ensureChannelPath(d.id);
+            const common = {
+                name: d.name,
+                type: d.type,
+                role: d.role,
+                read: true,
+                write: false,
+                def: d.def,
+            };
+            if (d.unit) {
+                common.unit = d.unit;
+            }
+            await this.setObjectNotExistsAsync(d.id, { type: 'state', common, native: {} });
+            this._nodes[d.id] = { name: d.name, type: d.type, role: d.role, unit: d.unit };
+        }
+    }
+
+    _sendToAsync(instance, command, message, timeoutMs = 15000) {
+        return new Promise(resolve => {
+            let done = false;
+            const timer = this.setTimeout(() => {
+                if (!done) {
+                    done = true;
+                    resolve({ error: 'timeout' });
+                }
+            }, timeoutMs);
+            this.sendTo(instance, command, message, result => {
+                if (done) {
+                    return;
+                }
+                done = true;
+                this.clearTimeout(timer);
+                resolve(result || {});
+            });
+        });
+    }
+
+    async _persistYieldsSnapshotState() {
+        try {
+            await this.setStateAsync('yields.snapshot', {
+                val: JSON.stringify(this._monthlyYields),
+                ack: true,
+            });
+        } catch (e) {
+            this._log('WARN', `Ertrag-Snapshot State: ${e.message}`);
+        }
+    }
+
+    async _readYieldsSnapshotState() {
+        try {
+            const st = await this.getStateAsync('yields.snapshot');
+            if (!st || !st.val || typeof st.val !== 'string') {
+                return null;
+            }
+            const data = JSON.parse(st.val);
+            if (!data.months || typeof data.months !== 'object') {
+                return null;
+            }
+            return {
+                ...this._defaultMonthlyYields(),
+                ...data,
+                months: { ...data.months },
+                extraYears: Array.isArray(data.extraYears) ? [...data.extraYears] : [],
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    async _syncYieldsToInflux() {
+        if (!this._cfg.influxEnable || !this._monthlyYields?.months) {
+            return;
+        }
+        const points = [];
+        for (const [key, entry] of Object.entries(this._monthlyYields.months)) {
+            const parsed = this._parseMonthKey(key);
+            const wh = entry && typeof entry === 'object' ? entry.wh : entry;
+            const n = Math.round(parseFloat(wh));
+            if (!parsed || !n) {
+                continue;
+            }
+            const ts = new Date(parsed.year, parsed.month - 1, 1, 12, 0, 0).getTime();
+            points.push({
+                id: `${this.namespace}.yield.monthly`,
+                state: { val: Math.round((n / 1000) * 1000) / 1000, ts, ack: true, q: 0 },
+            });
+        }
+        if (!points.length) {
+            return;
+        }
+        const result = await this._sendToAsync(this._cfg.influxInstance, 'storeState', points, 20000);
+        if (result && result.error) {
+            throw new Error(String(result.error));
+        }
+        this._log('INFO', `${points.length} Monatserträge → ${this._cfg.influxInstance} (yield.monthly)`);
+    }
+
+    async _loadYieldsFromInflux() {
+        if (!this._cfg.influxEnable) {
+            return null;
+        }
+        const result = await this._sendToAsync(
+            this._cfg.influxInstance,
+            'getHistory',
+            {
+                id: `${this.namespace}.yield.monthly`,
+                options: {
+                    start: Date.UTC(2000, 0, 1),
+                    end: Date.now(),
+                    count: 5000,
+                    aggregate: 'none',
+                },
+            },
+            20000,
+        );
+        const rows = result && (result.result || result.rows);
+        if (result?.error || !Array.isArray(rows) || !rows.length) {
+            return null;
+        }
+        const vals = rows.map(p => parseFloat(p.val)).filter(v => !isNaN(v) && v > 0);
+        if (!vals.length) {
+            return null;
+        }
+        const max = Math.max(...vals);
+        const toWh = v => (max > 5000 ? Math.round(v) : Math.round(v * 1000));
+        const months = {};
+        const extraYears = new Set();
+        for (const p of rows) {
+            const v = parseFloat(p.val);
+            if (!p.ts || isNaN(v) || v <= 0) {
+                continue;
+            }
+            const d = new Date(p.ts);
+            const key = this._monthKey(d.getFullYear(), d.getMonth() + 1);
+            months[key] = {
+                wh: toWh(v),
+                source: 'manual',
+                updatedAt: new Date(p.ts).toISOString(),
+            };
+            extraYears.add(d.getFullYear());
+        }
+        if (!Object.keys(months).length) {
+            return null;
+        }
+        return {
+            ...this._defaultMonthlyYields(),
+            months,
+            extraYears: [...extraYears].sort((a, b) => a - b),
+        };
     }
 
     _monthKey(year, month) {
@@ -2146,7 +2511,7 @@ class KostalPikoAdapter extends utils.Adapter {
         const yearEuro = {};
         const yearKwp = {};
         const tariff = data.feedInTariff || 0.3925;
-        const kwp = data.installedKwp || 0;
+        const kwp = data.installedKwp || this._cfg.yieldInstalledKwp || this._getInstalledKwp() || 0;
 
         years.forEach(year => {
             let sumWh = 0;
@@ -2180,6 +2545,8 @@ class KostalPikoAdapter extends utils.Adapter {
             },
             storagePath: this._yieldsCachePath || null,
             backupPath: this._yieldsCachePath ? `${this._yieldsCachePath}.bak` : null,
+            influxBackup: !!this._cfg.influxEnable,
+            influxInstance: this._cfg.influxInstance || null,
             historyFrom: this._lastHistoryRows.length
                 ? [...this._lastHistoryRows].sort((a, b) => a.ts - b.ts)[0].date.substring(0, 10)
                 : null,
@@ -2313,16 +2680,68 @@ class KostalPikoAdapter extends utils.Adapter {
         }
 
         if (action === 'restoreBackup') {
-            const bak = `${this._yieldsCachePath}.bak`;
-            const data = await this._readYieldsFile(bak);
+            const tried = [];
+            const tryFile = async filePath => {
+                tried.push(filePath);
+                return this._readYieldsFile(filePath);
+            };
+            let data = this._yieldsCachePath ? await tryFile(`${this._yieldsCachePath}.bak`) : null;
             if (!data || !Object.keys(data.months).length) {
-                throw new Error('Kein Backup gefunden oder Backup leer (.bak)');
+                data = await this._readYieldsSnapshotState();
+                if (data) {
+                    tried.push('yields.snapshot');
+                }
+            }
+            if (!data || !Object.keys(data.months).length) {
+                for (const dir of this._legacyDataDirs()) {
+                    data = await tryFile(path.join(dir, 'monthly-yields.json.bak'));
+                    if (data && Object.keys(data.months).length) {
+                        break;
+                    }
+                    data = await tryFile(path.join(dir, 'monthly-yields.json'));
+                    if (data && Object.keys(data.months).length) {
+                        break;
+                    }
+                }
+            }
+            if (!data || !Object.keys(data.months).length) {
+                throw new Error(`Kein Backup gefunden (${tried.join(', ') || 'keine Pfade'})`);
             }
             this._monthlyYields = data;
-            await this._saveMonthlyYields();
+            await this._saveMonthlyYields({ force: true });
             return {
                 ok: true,
                 message: `${Object.keys(data.months).length} Monate aus Backup wiederhergestellt`,
+            };
+        }
+
+        if (action === 'restoreFromInflux') {
+            if (!this._cfg.influxEnable) {
+                throw new Error('InfluxDB-Sync ist nicht aktiv – in den Adapter-Einstellungen einschalten');
+            }
+            const data = await this._loadYieldsFromInflux();
+            if (!data || !Object.keys(data.months).length) {
+                throw new Error('InfluxDB enthält noch keine Monatserträge (yield.monthly)');
+            }
+            const mode = body.mode === 'replace' ? 'replace' : 'merge';
+            if (mode === 'replace') {
+                this._monthlyYields = data;
+            } else {
+                this._monthlyYields.extraYears = [
+                    ...new Set([...(this._monthlyYields.extraYears || []), ...(data.extraYears || [])]),
+                ].sort((a, b) => a - b);
+                Object.entries(data.months).forEach(([key, entry]) => {
+                    const existing = this._monthlyYields.months[key];
+                    if (existing?.source === 'manual') {
+                        return;
+                    }
+                    this._monthlyYields.months[key] = entry;
+                });
+            }
+            await this._saveMonthlyYields({ force: true });
+            return {
+                ok: true,
+                message: `${Object.keys(this._monthlyYields.months).length} Monate aus InfluxDB (${mode})`,
             };
         }
 
@@ -2457,7 +2876,7 @@ class KostalPikoAdapter extends utils.Adapter {
                 throw new Error('Keine Import-Daten (data oder csv)');
             }
 
-            await this._saveMonthlyYields();
+            await this._saveMonthlyYields({ force: true });
             return { ok: true, message: `${imported} Monatswerte importiert (${mode})` };
         }
 
@@ -2609,6 +3028,57 @@ class KostalPikoAdapter extends utils.Adapter {
         return 2;
     }
 
+    _historyColValue(row, col) {
+        switch (col) {
+            case COL.DC1_U:
+                return row.dc1?.voltage;
+            case COL.DC1_I:
+                return row.dc1?.current;
+            case COL.DC1_P:
+                return row.dc1?.power;
+            case COL.DC2_U:
+                return row.dc2?.voltage;
+            case COL.DC2_I:
+                return row.dc2?.current;
+            case COL.DC2_P:
+                return row.dc2?.power;
+            case COL.DC3_U:
+                return row.dc3?.voltage;
+            case COL.DC3_I:
+                return row.dc3?.current;
+            case COL.DC3_P:
+                return row.dc3?.power;
+            case COL.AC1_U:
+                return row.ac1?.voltage;
+            case COL.AC1_I:
+                return row.ac1?.current;
+            case COL.AC1_P:
+                return row.ac1?.power;
+            case COL.AC2_U:
+                return row.ac2?.voltage;
+            case COL.AC2_I:
+                return row.ac2?.current;
+            case COL.AC2_P:
+                return row.ac2?.power;
+            case COL.AC3_U:
+                return row.ac3?.voltage;
+            case COL.AC3_I:
+                return row.ac3?.current;
+            case COL.AC3_P:
+                return row.ac3?.power;
+            case COL.AC_F:
+                return row.frequency;
+            case COL.AC_S:
+                return row.acStatus;
+            case COL.ERR:
+                return row.errorCode;
+            case COL.TOTAL_E:
+                return row.totalEnergy;
+            default:
+                return null;
+        }
+    }
+
     _calcHistVal(row, def) {
         if (def.col === null) {
             if (def.id === 'history.ac.totalPower') {
@@ -2627,11 +3097,11 @@ class KostalPikoAdapter extends utils.Adapter {
             }
             return null;
         }
-        const raw = row._raw[def.col];
-        if (raw === null || raw === undefined) {
+        const val = this._historyColValue(row, def.col);
+        if (val === null || val === undefined) {
             return null;
         }
-        return Math.round(raw * def.factor * 1000) / 1000;
+        return Math.round(val * 1000) / 1000;
     }
 
     // ─── Parser: LogDaten.dat ───────────────────────────────────────────────────
@@ -2662,10 +3132,6 @@ class KostalPikoAdapter extends utils.Adapter {
             } // Ereigniszeilen vorerst überspringen
 
             const ts = (pikoEpoch + zeit) * 1000; // ms
-            const raw_nums = cols.map(c => {
-                const n = parseFloat(c);
-                return isNaN(n) ? null : n;
-            });
 
             const int = i => parseInt(cols[i]) || 0;
             const flt = i => parseFloat(cols[i]) || 0;
@@ -2673,7 +3139,6 @@ class KostalPikoAdapter extends utils.Adapter {
             rows.push({
                 ts,
                 date: new Date(ts).toISOString(),
-                _raw: raw_nums,
                 dc1: {
                     voltage: int(COL.DC1_U),
                     current: int(COL.DC1_I) / 1000,
@@ -2711,41 +3176,75 @@ class KostalPikoAdapter extends utils.Adapter {
 
     // ─── HTTP-Client ─────────────────────────────────────────────────────────────
 
-    _fetchPage(path) {
+    _fetchPage(path, timeoutMs = 15000) {
+        const maxBytes = path === POLL_URLS.log ? 12 * 1024 * 1024 : 2 * 1024 * 1024;
         return new Promise((resolve, reject) => {
             const auth = Buffer.from(`${this._cfg.user}:${this._cfg.password}`).toString('base64');
+            let settled = false;
+            let absTimer;
+            const done = (err, data) => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                if (absTimer) {
+                    this.clearTimeout(absTimer);
+                }
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(data);
+                }
+            };
             const req = http.request(
                 {
                     hostname: this._cfg.ip,
                     port: this._cfg.port,
                     path,
                     method: 'GET',
-                    timeout: 15000,
+                    timeout: timeoutMs,
                     headers: {
                         Authorization: `Basic ${auth}`,
                         'User-Agent': `ioBroker-KostalPiko/${ADAPTER_VERSION}`,
                     },
                 },
                 res => {
-                    let data = '';
-                    res.setEncoding('latin1'); // PIKO sendet windows-1252
-                    res.on('data', c => (data += c));
+                    const chunks = [];
+                    let total = 0;
+                    res.on('data', c => {
+                        total += c.length;
+                        if (total > maxBytes) {
+                            req.destroy();
+                            return done(new Error(`${path} zu groß (${total} bytes)`));
+                        }
+                        chunks.push(c);
+                    });
                     res.on('end', () => {
                         if (res.statusCode === 401) {
-                            return reject(new Error('Auth fehlgeschlagen (401)'));
+                            return done(new Error('Auth fehlgeschlagen (401)'));
                         }
                         if (res.statusCode !== 200) {
-                            return reject(new Error(`HTTP ${res.statusCode} für ${path}`));
+                            return done(new Error(`HTTP ${res.statusCode} für ${path}`));
                         }
-                        resolve(data);
+                        const buf = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
+                        const data = Buffer.isBuffer(buf) ? buf.toString('latin1') : String(buf);
+                        const declared = parseInt(res.headers['content-length'], 10);
+                        if (declared > 10000 && data.length < declared * 0.5) {
+                            return done(new Error(`truncated ${path} (got ${data.length} of ${declared} bytes)`));
+                        }
+                        done(null, data);
                     });
                 },
             );
             req.on('timeout', () => {
                 req.destroy();
-                reject(new Error(`Timeout für ${path}`));
+                done(new Error(`Timeout für ${path}`));
             });
-            req.on('error', e => reject(e));
+            req.on('error', e => done(e));
+            absTimer = this.setTimeout(() => {
+                req.destroy();
+                done(new Error(`Timeout für ${path}`));
+            }, timeoutMs);
             req.end();
         });
     }
@@ -3192,12 +3691,13 @@ class KostalPikoAdapter extends utils.Adapter {
     }
 
     _getInstalledKwp() {
-        const { moduleWp, string1Modules, string2Modules, string3Modules } = this._cfg;
-        if (!moduleWp) {
+        const wp = this._getModuleParams().wp || this._cfg.moduleWp || 0;
+        if (!wp) {
             return 0;
         }
-        const modules = (string1Modules || 0) + (string2Modules || 0) + (string3Modules || 0);
-        return modules > 0 ? (moduleWp * modules) / 1000 : 0;
+        const modules =
+            (this._cfg.string1Modules || 0) + (this._cfg.string2Modules || 0) + (this._cfg.string3Modules || 0);
+        return modules > 0 ? Math.round(((wp * modules) / 1000) * 1000) / 1000 : 0;
     }
 
     _formatDuration(minutes) {
@@ -4704,30 +5204,18 @@ ${this._tdCell(`${daysWithData}/${daysInMonth} Tage`)}
                 });
             }
             if (p === '/api/history') {
-                // Alle Zeilen senden – Filterung/Limitierung passiert im Browser
-                const rows = [...this._lastHistoryRows].reverse();
-                const newest = this._lastHistoryRows.length
-                    ? this._lastHistoryRows[this._lastHistoryRows.length - 1].date
-                    : null;
-                const todayMeta = this._getTodayHistoryMeta();
-                return this._json(res, {
-                    rows,
-                    pikoEpoch: this._pikoEpoch ? new Date(this._pikoEpoch * 1000).toISOString() : null,
-                    recordCount: this._lastHistoryRows.length,
-                    lastImported: this._lastImportIso,
-                    newestRecord: newest,
-                    todayNewest: todayMeta.todayNewest,
-                    todayStale: todayMeta.todayStale,
-                    todayAgeMin: todayMeta.ageMin,
-                    loading: this._historyLoading || false,
-                    stringAnalysis: this._getStringAnalysisConfig(),
-                    temperatureAnalysis: this._getTemperatureAnalysis(),
-                    stringCount: this._getStringCount(),
-                    fromCache: this._historyLoading && this._lastHistoryRows.length > 0,
+                res.writeHead(200, {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Access-Control-Allow-Origin': '*',
                 });
+                return res.end(this._getHistoryApiJson());
             }
             if (p === '/api/logs') {
                 return this._json(res, { logs: this._logBuffer });
+            }
+            if (p === '/api/logs/clear') {
+                this._logBuffer = [];
+                return this._json(res, { ok: true });
             }
             if (p === '/api/status') {
                 return this._json(res, {
@@ -4816,7 +5304,7 @@ ${this._tdCell(`${daysWithData}/${daysInMonth} Tage`)}
 
     _json(res, obj) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify(obj, null, 2));
+        res.end(JSON.stringify(obj));
     }
 
     // ─── Logger ──────────────────────────────────────────────────────────────────
@@ -5191,7 +5679,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="loadYields()" title="Tabelle neu laden">&#8635; Aktualisieren</button>
         <button class="btn" onclick="refreshYieldsAuto()" title="Monate aus dem lokalen History-Cache berechnen (nicht vom PIKO)">&#9889; Aus Cache</button>
-        <button class="btn" onclick="restoreYieldsBackup()" title="monthly-yields.json.bak wiederherstellen">&#9851; Backup</button>
+        <button class="btn" onclick="restoreYieldsBackup()" title="monthly-yields.json.bak oder State-Snapshot wiederherstellen">&#9851; Backup</button>
+        <button class="btn" onclick="restoreYieldsInflux()" title="Monatswerte aus InfluxDB laden (Grafana-Serie yield.monthly)">&#128190; InfluxDB</button>
         <button class="btn" onclick="clearYieldsAuto()" title="Automatisch berechnete Monatswerte entfernen">&#128465; Auto l&ouml;schen</button>
         <button class="btn" onclick="addYieldYear()" title="Leere Jahres-Spalte hinzuf&uuml;gen">&#43; Jahr</button>
         <button class="btn" onclick="fillYieldYears()" title="Alle Jahre von Inbetriebnahme bis heute">&#128197; Jahre auff&uuml;llen</button>
@@ -5224,6 +5713,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
     </div>
     <div style="font-size:10px;color:var(--mut);line-height:1.6;margin-bottom:8px">
       <strong>Manuell eingeben:</strong> Zelle anklicken &rarr; Monatswert in Wh eintragen (wie in Excel). Blaue Werte = manuell, wei&szlig;e = aus History-Cache berechnet.
+      Die Tabelle liegt unter <code>/opt/iobroker/iobroker-data/kostalpiko.N/</code> (nicht im Adapter-Ordner) und wird zusätzlich als State und nach InfluxDB gesichert.
       <strong>Aus Cache</strong> = Server-Speicher (history-cache.json), <em>nicht</em> direkt vom Wechselrichter &middot; neue Rohdaten: Historie-Tab &rarr; „Vom PIKO laden“.
       Gr&uuml;n/Rot = &uuml;ber/unter dem Durchschnitt aller Jahre f&uuml;r diesen Monat.
       <strong>+ Jahr</strong> = leere Spalte f&uuml;r Vorjahre &middot; <strong>Import/Export</strong> = Backup oder Excel-Migration.
@@ -5278,9 +5768,9 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <label>Level:<select id="lvlF" onchange="renderLogs()">
       <option value="">Alle</option><option>SYSTEM</option><option>INFO</option><option>WARN</option><option>ERROR</option><option>DEBUG</option>
     </select></label>
-    <label><input type="checkbox" id="aScrl" checked> Auto-Scroll</label>
+    <label><input type="checkbox" id="aScrl" checked> An neueste halten</label>
     <button class="btn" onclick="loadLogs()">&#8635; Aktualisieren</button>
-    <button class="btn" onclick="allLogs=[];document.getElementById('lWrap').innerHTML=''">&#128465; L&ouml;schen</button>
+    <button class="btn" onclick="clearLogs()">&#128465; L&ouml;schen</button>
   </div>
   <div class="lw" id="lWrap"></div>
 </div>
